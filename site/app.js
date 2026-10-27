@@ -55,6 +55,7 @@ function relevant(){const q=val('search').toLowerCase();return places.filter(p=>
  (p.map===val('activeMap'))&&(!val('filterGroup')||p.group===val('filterGroup'))&&
  (!val('filterRating')||p.rating===val('filterRating'))&&(!val('filterSize')||(p.size||"Doesn't matter")===val('filterSize'))&&(!val('filterVisibility')||(p.visibility||'Not sure')===val('filterVisibility')))}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',render);
+function placeFacts(p){const wrap=document.createElement('div');wrap.className='placeFacts';for(const [icon,label,value] of [['★','Rating',p.rating||'Good'],['▣','Size',p.size||"Doesn't matter"],['◉','Visibility',p.visibility||'Not sure']]){const item=document.createElement('span');item.className='placeFact';item.title=label;const symbol=document.createElement('span');symbol.className='factIcon';symbol.textContent=icon;symbol.setAttribute('aria-hidden','true');item.append(symbol,document.createTextNode(label+': '+value));wrap.append(item)}return wrap}
 function render(){
  const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');if(available.includes(pendingMapSelection))pendingMapSelection='';
  const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('activeMap')),'All groups');$('filterGroup').value=gg&&groups(val('activeMap')).includes(gg)?gg:'';
@@ -63,15 +64,15 @@ function render(){
  for(const p of items){let card=document.createElement('article');card.className='card';
  const info=document.createElement('div');info.className='meta';info.textContent=(p.map||'Default map')+' / '+(p.group||'No group');
  const h=document.createElement('h3');h.textContent=p.title;const desc=document.createElement('p');desc.textContent=p.description||'No description';
- const badge=document.createElement('span');badge.className='rating';badge.textContent=p.rating||'Good';
- const meta=document.createElement('p');meta.className='meta';meta.textContent=(p.size||"Doesn't matter")+' · '+(p.visibility||'Not sure')+' · '+Number(p.lat).toFixed(5)+', '+Number(p.lng).toFixed(5);
+ const facts=placeFacts(p);
+ const meta=document.createElement('p');meta.className='meta';meta.textContent=Number(p.lat).toFixed(5)+', '+Number(p.lng).toFixed(5);
  const edit=document.createElement('button');edit.textContent='View / Edit';edit.onclick=()=>openEditor(p);
- card.append(info,h,badge,desc,meta);if(p.photoExists){const img=document.createElement('img');img.alt='Place photo';card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}card.append(edit);$('cards').append(card)}
+ card.append(info,h,facts,desc,meta);if(p.photoExists){const img=document.createElement('img');img.alt='Place photo';card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}card.append(edit);$('cards').append(card)}
  if(!map)return;markers.clearLayers();let coords=[];
  items.forEach(p=>{if(!Number.isFinite(Number(p.lat))||!Number.isFinite(Number(p.lng)))return;let point=[Number(p.lat),Number(p.lng)];coords.push(point);let dot=L.circleMarker(point,{radius:9,color:p.rating==='Perfect'?'#149667':p.rating==='Bad'?'#ce4961':'#286bca',fillOpacity:.85});
  const preview=document.createElement('div');preview.className='placeHover';
  const heading=document.createElement('strong');heading.textContent=p.title||'Untitled place';preview.append(heading);
- const detail=document.createElement('div');detail.className='placeHoverMeta';detail.textContent=[p.group,p.rating,p.size].filter(Boolean).join(' · ');preview.append(detail);
+ const detail=document.createElement('div');detail.className='placeHoverMeta';detail.textContent=p.group||'No group';preview.append(detail,placeFacts(p));
  if(p.description){const description=document.createElement('p');description.textContent=p.description;preview.append(description)}
  if(p.photoExists){const img=document.createElement('img');img.alt='Photo of '+(p.title||'place');img.loading='lazy';preview.append(img);
  getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{img.remove()})}
