@@ -94,12 +94,37 @@ $('import').onclick=async()=>{if(!user||!pending.length)return;const overwrite=$
  }catch(x){err(x);$('importSummary').textContent='Imported '+count+' rows before error. Recheck before retrying.'}};
 
 function locateUser(initial=false){
- if(!navigator.geolocation){if(!initial)toast('Location is not available in this browser.');return}
+ const button=$('locate');
+ const setStatus=(message,isError=false)=>{
+   $('locationStatus').textContent=message;
+   $('locationStatus').classList.toggle('locationError',isError);
+ };
+ if(!window.isSecureContext || !navigator.geolocation){
+   setStatus('Location is unavailable. Open My Places over HTTPS in a browser with location access.',true);
+   return;
+ }
+ if(!initial)button.disabled=true;
+ button.textContent='⌖ Locating…';
+ setStatus('Finding your position…');
  navigator.geolocation.getCurrentPosition(pos=>{
    userPosition=[pos.coords.latitude,pos.coords.longitude];
-   if(map){if(locationMarker)locationMarker.setLatLng(userPosition);else locationMarker=L.circleMarker(userPosition,{radius:8,color:'#ffffff',weight:3,fillColor:'#236bd5',fillOpacity:1}).addTo(map).bindTooltip('You are here');map.setView(userPosition,15)}
+   if(map){
+     if(locationMarker)locationMarker.setLatLng(userPosition);
+     else locationMarker=L.circleMarker(userPosition,{radius:9,color:'#fff',weight:3,fillColor:'#236bd5',fillOpacity:1}).addTo(map).bindTooltip('You are here');
+     map.invalidateSize();
+     map.setView(userPosition,16,{animate:true});
+   }
    locatedOnce=true;
- },e=>{if(!initial)toast('Could not get your location: '+e.message)},{enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+   setStatus('Location found (±'+Math.round(pos.coords.accuracy)+' m).');
+   button.disabled=false;button.textContent='⌖ My location';
+ },error=>{
+   let reason=error.code===1?'Location permission denied. Enable location permission for this site in browser settings.':
+     error.code===2?'Your phone could not determine its location. Check device location services.':
+     error.code===3?'Location request timed out. Tap My location to retry.':
+     'Unable to obtain location: '+error.message;
+   setStatus(reason,true);
+   button.disabled=false;button.textContent='⌖ Retry location';
+ },{enableHighAccuracy:true,timeout:20000,maximumAge:15000});
 }
 $('locate').onclick=()=>locateUser(false);
 $('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains('hidden');hide('filters',!expanding);$('toggleFilters').setAttribute('aria-expanded',String(expanding));$('toggleFilters').innerHTML='⚙ Filters <span id="filterCount"></span> '+(expanding?'▴':'▾');updateFilterBadge()};
