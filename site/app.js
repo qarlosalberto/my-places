@@ -68,7 +68,16 @@ function render(){
  const edit=document.createElement('button');edit.textContent='View / Edit';edit.onclick=()=>openEditor(p);
  card.append(info,h,badge,desc,meta);if(p.photoExists){const img=document.createElement('img');img.alt='Place photo';card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}card.append(edit);$('cards').append(card)}
  if(!map)return;markers.clearLayers();let coords=[];
- items.forEach(p=>{if(!Number.isFinite(Number(p.lat))||!Number.isFinite(Number(p.lng)))return;let point=[Number(p.lat),Number(p.lng)];coords.push(point);let dot=L.circleMarker(point,{radius:9,color:p.rating==='Perfect'?'#149667':p.rating==='Bad'?'#ce4961':'#286bca',fillOpacity:.85});dot.bindTooltip(p.title);dot.on('click',()=>openEditor(p));dot.addTo(markers)});
+ items.forEach(p=>{if(!Number.isFinite(Number(p.lat))||!Number.isFinite(Number(p.lng)))return;let point=[Number(p.lat),Number(p.lng)];coords.push(point);let dot=L.circleMarker(point,{radius:9,color:p.rating==='Perfect'?'#149667':p.rating==='Bad'?'#ce4961':'#286bca',fillOpacity:.85});
+ const preview=document.createElement('div');preview.className='placeHover';
+ const heading=document.createElement('strong');heading.textContent=p.title||'Untitled place';preview.append(heading);
+ const detail=document.createElement('div');detail.className='placeHoverMeta';detail.textContent=[p.group,p.rating,p.size].filter(Boolean).join(' · ');preview.append(detail);
+ if(p.description){const description=document.createElement('p');description.textContent=p.description;preview.append(description)}
+ if(p.photoExists){const img=document.createElement('img');img.alt='Photo of '+(p.title||'place');img.loading='lazy';preview.append(img);
+ getPhoto(p).then(src=>{if(src&&img.isConnected)img.src=src}).catch(()=>{img.remove()})}
+ dot.bindTooltip(preview,{direction:'top',offset:[0,-10],opacity:1,className:'placeHoverTooltip',interactive:false});
+ dot.on('click',()=>{if(window.matchMedia('(hover: none)').matches){dot.openTooltip()}else{openEditor(p)}});
+ dot.addTo(markers)});
  if(userPosition&&!locatedOnce){map.setView(userPosition,15);locatedOnce=true;return}
  if(userPosition)return;
  if(coords.length&&!(val('search')||val('filterGroup')||val('filterRating')||val('filterSize')||val('filterVisibility'))){map.fitBounds(coords,{padding:[35,35],maxZoom:13})}
