@@ -27,7 +27,7 @@ if(!configured){hide('setup',false);$('login').disabled=true}else{
  });
 }
 
-let migrationBusy=false;
+let migrationBusy=false,pendingMapSelection='';
 async function migrateLegacyMaps(docs){
  if(migrationBusy||!user)return;
  const legacy=docs.filter(d=>!d.data().map);
@@ -56,7 +56,7 @@ function relevant(){const q=val('search').toLowerCase();return places.filter(p=>
  (!val('filterRating')||p.rating===val('filterRating'))&&(!val('filterSize')||(p.size||"Doesn't matter")===val('filterSize'))&&(!val('filterVisibility')||(p.visibility||'Not sure')===val('filterVisibility')))}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',render);
 function render(){
- const previous=$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');
+ const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');if(available.includes(pendingMapSelection))pendingMapSelection='';
  const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('activeMap')),'All groups');$('filterGroup').value=gg&&groups(val('activeMap')).includes(gg)?gg:'';
  const items=relevant();$('count').textContent=items.length+' places';
  $('cards').replaceChildren();if(!items.length)$('cards').append(Object.assign(document.createElement('p'),{textContent:'No places match your filters.'}));
@@ -193,7 +193,7 @@ $('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;const lat=N
  if(p)batch.update(ref,fields);else batch.set(ref,{...fields,createdAt:serverTimestamp()});
  if(photoData)batch.set(doc(db,'users',user.uid,'places',ref.id,'photos','main'),{image:photoData,updatedAt:serverTimestamp()});
  else if(p&&$('removePhoto').checked)batch.delete(doc(db,'users',user.uid,'places',ref.id,'photos','main'));
- await batch.commit();$('activeMap').value=cat;photoUrls.delete(ref.id);stopPrecision(false);$('editor').close();toast('Place saved')}catch(x){err(x)}finally{save.disabled=false}};
+ pendingMapSelection=cat;await batch.commit();photoUrls.delete(ref.id);stopPrecision(false);$('editor').close();toast('Place saved')}catch(x){err(x)}finally{save.disabled=false}};
 $('delete').onclick=async()=>{if(!selected||!confirm('Permanently delete this place?'))return;try{const b=writeBatch(db);let ref=doc(db,'users',user.uid,'places',selected.id);b.delete(ref);if(selected.photoExists)b.delete(doc(db,'users',user.uid,'places',selected.id,'photos','main'));await b.commit();stopPrecision(false);$('editor').close();toast('Place deleted')}catch(x){err(x)}};
 function csvEscape(s){const x=String(s??'');return /[",\r\n]/.test(x)?'"'+x.replaceAll('"','""')+'"':x}
 const columns=['lat','lng','title','description','rating','map','group','size','visibility'];
