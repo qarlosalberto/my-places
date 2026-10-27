@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function invited() {
+   return request.auth != null
+    && request.auth.token.email is string
+    && request.auth.token.email_verified == true
+    && request.auth.token.firebase.sign_in_provider == 'google.com'
+    && exists(/databases/$(database)/documents/invites/$(request.auth.token.email))
+    && get(/databases/$(database)/documents/invites/$(request.auth.token.email)).data.active == true;
+  }
+  match /invites/{email} {
+   allow get: if request.auth != null && request.auth.token.email_verified == true && request.auth.token.email == email;
+   allow list, write: if false;
+  }
+  match /users/{uid}/places/{id} {
+   allow read, write: if invited() && request.auth.uid == uid;
+   match /photos/{photoId} {
+    allow read, delete: if invited() && request.auth.uid == uid && photoId == 'main';
+    allow create, update: if invited() && request.auth.uid == uid && photoId == 'main'
+     && request.resource.data.keys().hasOnly(['image','updatedAt'])
+     && request.resource.data.image is string && request.resource.data.image.size() <= 230000
+     && request.resource.data.image.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$');
+   }
+  }
+ }
+}
