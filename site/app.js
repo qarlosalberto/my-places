@@ -74,7 +74,7 @@ function render(){
  const detail=document.createElement('div');detail.className='placeHoverMeta';detail.textContent=[p.group,p.rating,p.size].filter(Boolean).join(' · ');preview.append(detail);
  if(p.description){const description=document.createElement('p');description.textContent=p.description;preview.append(description)}
  if(p.photoExists){const img=document.createElement('img');img.alt='Photo of '+(p.title||'place');img.loading='lazy';preview.append(img);
- getPhoto(p).then(src=>{if(src&&img.isConnected)img.src=src}).catch(()=>{img.remove()})}
+ getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{img.remove()})}
  dot.bindTooltip(preview,{direction:'top',offset:[0,-10],opacity:1,className:'placeHoverTooltip',interactive:false});
  dot.on('click',()=>{if(window.matchMedia('(hover: none)').matches){dot.openTooltip()}else{openEditor(p)}});
  dot.addTo(markers)});
