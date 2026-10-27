@@ -188,7 +188,24 @@ async function lookupAddress(lat,lng){
   if(name)apply(name);else if(seq===addressSequence)$('addressStatus').textContent='Address not found. Enter a custom title.';
  }catch(e){if(seq===addressSequence)$('addressStatus').textContent='Address lookup unavailable. Enter a custom title.'}
 }
-async function compress(f){const img=await createImageBitmap(f);let scale=Math.min(1,800/img.width,800/img.height);const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);img.close();for(const quality of [.7,.5,.35,.2]){const data=c.toDataURL('image/jpeg',quality);if(data.length<210000)return data}throw Error('Image too large after compression. Choose another image.')}
+// Decode pixels and re-encode in a new canvas. EXIF/GPS/camera metadata from the source is never copied.
+async function compress(f){
+ const img=await createImageBitmap(f,{imageOrientation:'from-image'});
+ try{
+  const scale=Math.min(1,800/img.width,800/img.height);
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));
+  const ctx=c.getContext('2d',{alpha:false});
+  if(!ctx)throw Error('Image processing unavailable');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,c.width,c.height);
+  ctx.drawImage(img,0,0,c.width,c.height);
+  for(const quality of [.7,.5,.35,.2]){
+   const data=c.toDataURL('image/jpeg',quality);
+   if(data.length<210000)return data;
+  }
+  throw Error('Image too large after compression. Choose another image.');
+ }finally{img.close()}
+}
 async function selectedPhoto(e){const file=e.target.files?.[0];if(!file)return;try{photoData=await compress(file);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;img.alt='Selected place photo';$('photoPreview').append(img);$('removePhoto').checked=false;toast('Photo ready to save')}catch(x){err(x)}finally{e.target.value=''}}
 $('takePhoto').onclick=()=>$('cameraPhoto').click();
 $('choosePhoto').onclick=()=>$('photo').click();
