@@ -22,7 +22,7 @@ if(!configured){hide('setup',false);$('login').disabled=true}else{
    const invite=await getDoc(doc(db,'invites',u.email.toLowerCase()));
    if(!invite.exists()||invite.data().active!==true){hide('denied',false);return}
    user=u;hide('dashboard',false);initMap();
-   unsubscribe=onSnapshot(collection(db,'users',u.uid,'places'),s=>{places=s.docs.map(d=>({id:d.id,...d.data(),map:d.data().map||d.data().category||'Default'}));render();migrateLegacyMaps(s.docs).catch(err)},err);
+   unsubscribe=onSnapshot(collection(db,'users',u.uid,'places'),s=>{places=s.docs.map(d=>({id:d.id,...d.data(),map:d.data().map||d.data().category||'Default'}));render();migrateLegacyMaps(s.docs).catch(err);sanitizeSavedPhotos(s.docs,u.uid).catch(err)},err);
   }catch(e){hide('denied',false);err(e)}
  });
 }
@@ -44,6 +44,62 @@ async function migrateLegacyMaps(docs){
   }
   toast('Existing categories have been mapped to Maps.');
  }finally{migrationBusy=false}
+}
+
+// Existing photographs: only re-encode JPEGs that contain ancillary metadata.
+// Older My Places canvas JPEGs are already metadata-free and need no lossy rewrite.
+const photoScanDone=new Set();let photoScanBusy=false;
+function jpegHasMetadata(dataUrl){
+ if(typeof dataUrl!=='string'||!dataUrl.startsWith('data:image/jpeg;base64,'))return true;
+ const binary=atob(dataUrl.slice('data:image/jpeg;base64,'.length));
+ if(binary.charCodeAt(0)!==255||binary.charCodeAt(1)!==216)return true;
+ let i=2;
+ while(i+3<binary.length){
+  if(binary.charCodeAt(i)!==255)return true;
+  while(i<binary.length&&binary.charCodeAt(i)===255)i++;
+  const marker=binary.charCodeAt(i++);
+  if(marker===218||marker===217)return false; // SOS / EOI: metadata headers finished
+  if(marker===1||(marker>=208&&marker<=215))continue;
+  if(i+1>=binary.length)return true;
+  const len=(binary.charCodeAt(i)<<8)|binary.charCodeAt(i+1);
+  if(len<2||i+len>binary.length)return true;
+  // APP1–APP15 and COM may carry EXIF, XMP, ICC, camera or other metadata.
+  // APP0 is commonly the minimal JFIF header and has no location data.
+  if((marker>=225&&marker<=239)||marker===254)return true;
+  i+=len;
+ }
+ return true;
+}
+async function sanitizeSavedPhotos(docs,uid){
+ if(photoScanBusy||!user||user.uid!==uid)return;
+ photoScanBusy=true;
+ let updated=0,failures=0;
+ try{
+  for(const place of docs){
+   if(!user||user.uid!==uid)break;
+   if(!place.data().photoExists||photoScanDone.has(uid+'/'+place.id))continue;
+   const photoRef=doc(db,'users',uid,'places',place.id,'photos','main');
+   try{
+    const snap=await getDoc(photoRef);
+    if(!snap.exists()){photoScanDone.add(uid+'/'+place.id);continue}
+    const original=snap.data().image;
+    if(jpegHasMetadata(original)){
+     const binary=Uint8Array.from(atob(original.split(',')[1]),c=>c.charCodeAt(0));
+     const clean=await compress(new Blob([binary],{type:'image/jpeg'}));
+     const batch=writeBatch(db);
+     batch.update(photoRef,{image:clean,updatedAt:serverTimestamp()});
+     await batch.commit();
+     photoUrls.set(place.id,clean);
+     updated++;
+    }
+    photoScanDone.add(uid+'/'+place.id);
+   }catch(e){failures++;console.warn('Could not sanitize photo for place',place.id,e)}
+   // Allow UI interaction between processed photos.
+   await new Promise(resolve=>setTimeout(resolve,30));
+  }
+  if(updated)toast(updated+' saved photo'+(updated===1?'':'s')+' cleaned of metadata.');
+  if(failures)toast(failures+' photo'+(failures===1?'':'s')+' could not be checked; reopen My Places to retry.');
+ }finally{photoScanBusy=false}
 }
 function initMap(){if(map){setTimeout(()=>map.invalidateSize(),80);return}map=L.map('map').setView([40.42,-3.7],5);locateUser(true);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);markers=L.layerGroup().addTo(map)}
 function categories(){return [...new Set(places.map(p=>p.map||p.category||'Default'))].sort()}
