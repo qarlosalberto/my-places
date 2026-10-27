@@ -100,3 +100,5 @@
 .placeHoverMeta{font-size:11px;color:#647995;margin-top:4px}
 .placeHover p{font-size:12px;line-height:1.4;color:#455c79;margin:7px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .placeHover img{display:block;width:100%;max-height:145px;object-fit:cover;border-radius:8px;margin-top:8px}
+
+.placeFacts{display:flex;flex-wrap:wrap;gap:5px 9px;margin:8px 0}.placeFact{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#456181;background:#edf4ff;padding:4px 7px;border-radius:7px;white-space:nowrap}.factIcon{font-size:14px;color:#236bd5;line-height:1}.placeHover .placeFacts{gap:4px;margin:7px 0}.placeHover .placeFact{font-size:11px;padding:3px 6px}
