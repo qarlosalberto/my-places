@@ -219,7 +219,7 @@ function locateUser(initial=false){
    return;
  }
  if(!initial)button.disabled=true;
- button.textContent='⌖ Locating…';
+ button.textContent='⌖';button.title='Locating…';
  setStatus('Finding your position…');
  navigator.geolocation.getCurrentPosition(pos=>{
    userPosition=[pos.coords.latitude,pos.coords.longitude];
@@ -231,17 +231,17 @@ function locateUser(initial=false){
    }
    locatedOnce=true;
    setStatus('Location found (±'+Math.round(pos.coords.accuracy)+' m).');
-   button.disabled=false;button.textContent='⌖ My location';
+   button.disabled=false;button.textContent='⌖';button.title='My location';
  },error=>{
    let reason=error.code===1?'Location permission denied. Enable location permission for this site in browser settings.':
      error.code===2?'Your phone could not determine its location. Check device location services.':
      error.code===3?'Location request timed out. Tap My location to retry.':
      'Unable to obtain location: '+error.message;
    setStatus(reason,true);
-   button.disabled=false;button.textContent='⌖ Retry location';
+   button.disabled=false;button.textContent='⌖';button.title='Retry location';
  },{enableHighAccuracy:true,timeout:20000,maximumAge:15000});
 }
 $('locate').onclick=()=>locateUser(false);
-$('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains('hidden');hide('filters',!expanding);$('toggleFilters').setAttribute('aria-expanded',String(expanding));$('toggleFilters').innerHTML='⚙ Filters <span id="filterCount"></span> '+(expanding?'▴':'▾');updateFilterBadge()};
+$('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains('hidden');hide('filters',!expanding);$('toggleFilters').setAttribute('aria-expanded',String(expanding));$('toggleFilters').innerHTML='⚙ <span class="compactLabel">Filters</span> <span id="filterCount"></span>';updateFilterBadge()};
 function updateFilterBadge(){const count=['search','filterGroup','filterRating','filterSize','filterVisibility'].filter(id=>val(id)).length;const badge=$('filterCount');if(badge)badge.textContent=count?'('+count+')':''}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',updateFilterBadge);
