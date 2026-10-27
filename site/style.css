@@ -102,3 +102,8 @@
 .placeHover img{display:block;width:100%;max-height:145px;object-fit:cover;border-radius:8px;margin-top:8px}
 
 .placeFacts{display:flex;flex-wrap:wrap;gap:5px 9px;margin:8px 0}.placeFact{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#456181;background:#edf4ff;padding:4px 7px;border-radius:7px;white-space:nowrap}.factIcon{font-size:14px;color:#236bd5;line-height:1}.placeHover .placeFacts{gap:4px;margin:7px 0}.placeHover .placeFact{font-size:11px;padding:3px 6px}
+
+/* Persistent GPS tracking control */
+.compactToolbar #tracking{font-size:21px;min-width:37px;padding:4px 8px}
+.compactToolbar #tracking.trackingActive{background:#e3f6ec;border-color:#66ba91;color:#087849;box-shadow:inset 0 0 0 1px #66ba91}
+@media(max-width:650px){.compactToolbar #tracking{min-width:32px;font-size:19px;padding:4px 5px}}
