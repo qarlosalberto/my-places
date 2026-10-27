@@ -6,6 +6,7 @@ const $=id=>document.getElementById(id), hide=(id,v)=>$(id).classList.toggle('hi
 const key=p=>Number(p.lat).toFixed(6)+','+Number(p.lng).toFixed(6);
 let auth,db,user,places=[],unsubscribe=()=>{},selected=null,pending=[],photoData=null,photoUrls=new Map(),map,markers,userPosition=null,locationMarker=null,locatedOnce=false;
 let precisionWatch=null,precisionTimeout=null,precisionStarted=0,bestFix=null,manualAdjusted=false,precisionMap=null,precisionMarker=null,accuracyMeters=null;
+let titleManuallyEdited=false,addressSequence=0,lastAddressCall=0;const addressCache=new Map();
 const toast=s=>{let t=$('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',4500)};
 const err=e=>{console.error(e);toast(e.message||String(e))};
 const configured=Boolean(firebaseConfig.apiKey&&!firebaseConfig.apiKey.includes('PON_AQUI')&&firebaseConfig.projectId&&!firebaseConfig.projectId.includes('PON_AQUI'));
@@ -60,10 +61,10 @@ function makeSelect(id,options,placeholder,choice=''){let sel=$(id);sel.replaceC
 function chooseGroups(choice=''){makeSelect('group',groups(val('newCategory')||val('category')),'No group',choice)}
 $('category').onchange=()=>chooseGroups();
 $('newCategory').oninput=()=>chooseGroups();
-function openEditor(p=null){stopPrecision(false);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
+function openEditor(p=null){stopPrecision(false);addressSequence++;titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
  for(const id of ['title','description','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
- makeSelect('category',categories(),'No category',p?.category||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('editor').showModal();initPrecisionMap();
+ makeSelect('category',categories(),'No category',p?.category||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('editor').showModal();initPrecisionMap();
  if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
 }
 $('new').onclick=()=>openEditor();$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
@@ -76,7 +77,7 @@ function updatePrecisionPosition(lat,lng,moveView=true){
  else {
   precisionMarker=L.marker(point,{draggable:true}).addTo(precisionMap);
   precisionMarker.on('dragstart',()=>{manualAdjusted=true;stopPrecision(true)});
-  precisionMarker.on('dragend',()=>{const ll=precisionMarker.getLatLng();manualAdjusted=true;accuracyMeters=null;updatePrecisionPosition(ll.lat,ll.lng,false);$('gpsStatus').textContent='Marker adjusted manually; GPS accuracy no longer applies.'});
+  precisionMarker.on('dragend',()=>{const ll=precisionMarker.getLatLng();manualAdjusted=true;accuracyMeters=null;updatePrecisionPosition(ll.lat,ll.lng,false);$('gpsStatus').textContent='Marker adjusted manually; GPS accuracy no longer applies.';lookupAddress(ll.lat,ll.lng)});
  }
  if(moveView)precisionMap.setView(point,Math.max(precisionMap.getZoom(),16));
 }
@@ -97,14 +98,14 @@ for(const id of ['lat','lng'])$(id).addEventListener('change',()=>{
  const lat=Number(val('lat')),lng=Number(val('lng'));
  if(Number.isFinite(lat)&&Math.abs(lat)<=90&&Number.isFinite(lng)&&Math.abs(lng)<=180){
   manualAdjusted=true;accuracyMeters=null;stopPrecision(false);updatePrecisionPosition(lat,lng);
-  $('gpsStatus').textContent='Coordinates changed manually.';
+  $('gpsStatus').textContent='Coordinates changed manually.';lookupAddress(lat,lng);
  }
 });
 function stopPrecision(show=true){
  if(precisionWatch!==null){navigator.geolocation?.clearWatch(precisionWatch);precisionWatch=null}
  if(precisionTimeout!==null){clearTimeout(precisionTimeout);precisionTimeout=null}
  $('gps').disabled=false;$('gps').textContent='⌖ Capture precise location';hide('stopGps',true);
- if(show&&bestFix)$('gpsStatus').textContent='Best GPS estimate: ±'+Math.round(bestFix.coords.accuracy)+' m. Drag marker to refine.';
+ if(show&&bestFix){$('gpsStatus').textContent='Best GPS estimate: ±'+Math.round(bestFix.coords.accuracy)+' m. Drag marker to refine.';lookupAddress(bestFix.coords.latitude,bestFix.coords.longitude)};
 }
 $('stopGps').onclick=()=>stopPrecision(true);
 $('gps').onclick=()=>{
@@ -127,6 +128,33 @@ $('gps').onclick=()=>{
   stopPrecision(false);
  },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 };
+
+$('title').addEventListener('input',()=>{titleManuallyEdited=Boolean(val('title'));addressSequence++});
+$('clearTitle').onclick=()=>{$('title').value='';titleManuallyEdited=false;addressSequence++;$('addressStatus').textContent='Enter your own title or capture a new position.';$('title').focus()};
+async function lookupAddress(lat,lng){
+ if(titleManuallyEdited||val('title')||!Number.isFinite(Number(lat))||!Number.isFinite(Number(lng)))return;
+ const key=Number(lat).toFixed(5)+','+Number(lng).toFixed(5);
+ const seq=++addressSequence;
+ const apply=name=>{if(seq===addressSequence&&!titleManuallyEdited&&!val('title')&&$('editor').open){$('title').value=name.slice(0,160);$('addressStatus').textContent='Suggested address · © OpenStreetMap contributors. You can edit it.'}};
+ if(addressCache.has(key)){const name=addressCache.get(key);if(name)apply(name);return}
+ $('addressStatus').textContent='Looking up address…';
+ try{
+  const delay=Math.max(0,1100-(Date.now()-lastAddressCall));
+  if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+  if(seq!==addressSequence||titleManuallyEdited||val('title'))return;
+  lastAddressCall=Date.now();
+  const url='https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+encodeURIComponent(lat)+'&lon='+encodeURIComponent(lng)+'&zoom=18&addressdetails=1';
+  const res=await fetch(url,{headers:{Accept:'application/json'}});
+  if(!res.ok)throw Error('Address lookup unavailable');
+  const data=await res.json();
+  const a=data.address||{};
+  const street=[a.road||a.pedestrian||a.footway||a.street||'',a.house_number||''].filter(Boolean).join(' ');
+  const town=a.city||a.town||a.village||a.municipality||a.county||'';
+  const name=[street||data.name||'',town].filter(Boolean).join(', ')||data.display_name||'';
+  addressCache.set(key,name||null);
+  if(name)apply(name);else if(seq===addressSequence)$('addressStatus').textContent='Address not found. Enter a custom title.';
+ }catch(e){if(seq===addressSequence)$('addressStatus').textContent='Address lookup unavailable. Enter a custom title.'}
+}
 async function compress(f){const img=await createImageBitmap(f);let scale=Math.min(1,800/img.width,800/img.height);const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);img.close();for(const quality of [.7,.5,.35,.2]){const data=c.toDataURL('image/jpeg',quality);if(data.length<210000)return data}throw Error('Image too large after compression. Choose another image.')}
 async function selectedPhoto(e){const file=e.target.files?.[0];if(!file)return;try{photoData=await compress(file);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;img.alt='Selected place photo';$('photoPreview').append(img);$('removePhoto').checked=false;toast('Photo ready to save')}catch(x){err(x)}finally{e.target.value=''}}
 $('takePhoto').onclick=()=>$('cameraPhoto').click();
