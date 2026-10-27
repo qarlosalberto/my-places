@@ -1,0 +1,92 @@
+import {firebaseConfig} from './firebase-config.js';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
+import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
+import {getFirestore,collection,doc,getDoc,onSnapshot,writeBatch,serverTimestamp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+const $=id=>document.getElementById(id), hide=(id,v)=>$(id).classList.toggle('hidden',v), val=id=>$(id).value.trim();
+const key=p=>Number(p.lat).toFixed(6)+','+Number(p.lng).toFixed(6);
+let auth,db,user,places=[],unsubscribe=()=>{},selected=null,pending=[],photoData=null,photoUrls=new Map(),map,markers;
+const toast=s=>{let t=$('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',4500)};
+const err=e=>{console.error(e);toast(e.message||String(e))};
+const configured=Boolean(firebaseConfig.apiKey&&!firebaseConfig.apiKey.includes('PON_AQUI')&&firebaseConfig.projectId&&!firebaseConfig.projectId.includes('PON_AQUI'));
+if(!configured){hide('setup',false);$('login').disabled=true}else{
+ const fb=initializeApp(firebaseConfig);auth=getAuth(fb);db=getFirestore(fb);
+ $('login').onclick=()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(err);
+ $('logout').onclick=()=>signOut(auth).catch(err);
+ onAuthStateChanged(auth,async u=>{
+  unsubscribe();unsubscribe=()=>{};user=null;places=[];photoUrls.clear();
+  hide('login',!!u);hide('logout',!u);$('identity').textContent=u?.email||'';hide('dashboard',true);hide('denied',true);
+  if(!u)return;
+  try{
+   const invite=await getDoc(doc(db,'invites',u.email.toLowerCase()));
+   if(!invite.exists()||invite.data().active!==true){hide('denied',false);return}
+   user=u;hide('dashboard',false);initMap();
+   unsubscribe=onSnapshot(collection(db,'users',u.uid,'places'),s=>{places=s.docs.map(d=>({id:d.id,...d.data()}));render()},err);
+  }catch(e){hide('denied',false);err(e)}
+ });
+}
+function initMap(){if(map){setTimeout(()=>map.invalidateSize(),80);return}map=L.map('map').setView([40.42,-3.7],5);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);markers=L.layerGroup().addTo(map)}
+function categories(){return [...new Set(places.map(p=>p.category).filter(Boolean))].sort()}
+function groups(cat){return [...new Set(places.filter(p=>!cat||p.category===cat).map(p=>p.group).filter(Boolean))].sort()}
+function refill(sel,options,label){const before=sel.value;sel.replaceChildren(new Option(label,''));options.forEach(s=>sel.add(new Option(s,s)));sel.value=options.includes(before)?before:''}
+function refreshGroupFilter(){refill($('filterGroup'),groups(val('filterCategory')),'All groups');render()}
+$('filterCategory').onchange=refreshGroupFilter;
+function relevant(){const q=val('search').toLowerCase();return places.filter(p=>(!q||[p.title,p.description,p.category,p.group].some(s=>String(s||'').toLowerCase().includes(q)))&&
+ (!val('filterCategory')||p.category===val('filterCategory'))&&(!val('filterGroup')||p.group===val('filterGroup'))&&
+ (!val('filterRating')||p.rating===val('filterRating'))&&(!val('filterSize')||(p.size||"Doesn't matter")===val('filterSize'))&&(!val('filterVisibility')||(p.visibility||'Not sure')===val('filterVisibility')))}
+for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',render);
+function render(){
+ const cat=$('filterCategory').value;refill($('filterCategory'),categories(),'All categories');$('filterCategory').value=cat&&categories().includes(cat)?cat:'';
+ const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('filterCategory')),'All groups');$('filterGroup').value=gg&&groups(val('filterCategory')).includes(gg)?gg:'';
+ const items=relevant();$('count').textContent=items.length+' places';
+ $('cards').replaceChildren();if(!items.length)$('cards').append(Object.assign(document.createElement('p'),{textContent:'No places match your filters.'}));
+ for(const p of items){let card=document.createElement('article');card.className='card';
+ const info=document.createElement('div');info.className='meta';info.textContent=(p.category||'Uncategorized')+' / '+(p.group||'No group');
+ const h=document.createElement('h3');h.textContent=p.title;const desc=document.createElement('p');desc.textContent=p.description||'No description';
+ const badge=document.createElement('span');badge.className='rating';badge.textContent=p.rating||'Good';
+ const meta=document.createElement('p');meta.className='meta';meta.textContent=(p.size||"Doesn't matter")+' · '+(p.visibility||'Not sure')+' · '+Number(p.lat).toFixed(5)+', '+Number(p.lng).toFixed(5);
+ const edit=document.createElement('button');edit.textContent='View / Edit';edit.onclick=()=>openEditor(p);
+ card.append(info,h,badge,desc,meta);if(p.photoExists){const img=document.createElement('img');img.alt='Place photo';card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}card.append(edit);$('cards').append(card)}
+ if(!map)return;markers.clearLayers();let coords=[];
+ items.forEach(p=>{if(!Number.isFinite(Number(p.lat))||!Number.isFinite(Number(p.lng)))return;let point=[Number(p.lat),Number(p.lng)];coords.push(point);let dot=L.circleMarker(point,{radius:9,color:p.rating==='Perfect'?'#149667':p.rating==='Bad'?'#ce4961':'#286bca',fillOpacity:.85});dot.bindTooltip(p.title);dot.on('click',()=>openEditor(p));dot.addTo(markers)});
+ if(coords.length&&!(val('search')||val('filterCategory')||val('filterGroup')||val('filterRating')||val('filterSize')||val('filterVisibility'))){map.fitBounds(coords,{padding:[35,35],maxZoom:13})}
+ else if(coords.length)map.fitBounds(coords,{padding:[35,35],maxZoom:14})
+}
+$('mapTab').onclick=()=>{hide('mapPanel',false);hide('listPanel',true);$('mapTab').classList.add('active');$('listTab').classList.remove('active');setTimeout(()=>map?.invalidateSize(),70)};
+$('listTab').onclick=()=>{hide('mapPanel',true);hide('listPanel',false);$('listTab').classList.add('active');$('mapTab').classList.remove('active')};
+function makeSelect(id,options,placeholder,choice=''){let sel=$(id);sel.replaceChildren(new Option(placeholder,''));options.forEach(s=>sel.add(new Option(s,s)));sel.value=choice||''}
+function chooseGroups(choice=''){makeSelect('group',groups(val('newCategory')||val('category')),'No group',choice)}
+$('category').onchange=()=>chooseGroups();
+$('newCategory').oninput=()=>chooseGroups();
+function openEditor(p=null){selected=p;photoData=null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
+ for(const id of ['title','description','lat','lng'])$(id).value=p?.[id]??'';
+ $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
+ makeSelect('category',categories(),'No category',p?.category||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('editor').showModal();
+ if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
+}
+$('new').onclick=()=>openEditor();$('close').onclick=()=>$('editor').close();
+$('gps').onclick=()=>{if(!navigator.geolocation)return toast('Geolocation unavailable');$('gpsStatus').textContent='Locating…';navigator.geolocation.getCurrentPosition(pos=>{$('lat').value=pos.coords.latitude.toFixed(7);$('lng').value=pos.coords.longitude.toFixed(7);$('gpsStatus').textContent='Location acquired (±'+Math.round(pos.coords.accuracy)+' m)'},e=>$('gpsStatus').textContent=e.message,{enableHighAccuracy:true,timeout:20000})};
+async function compress(f){const img=await createImageBitmap(f);let scale=Math.min(1,800/img.width,800/img.height);const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);img.close();for(const quality of [.7,.5,.35,.2]){const data=c.toDataURL('image/jpeg',quality);if(data.length<210000)return data}throw Error('Image too large after compression. Choose another image.')}
+$('photo').onchange=async e=>{if(!e.target.files[0])return;try{photoData=await compress(e.target.files[0]);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;$('photoPreview').append(img)}catch(x){err(x)}};
+async function getPhoto(p){if(photoUrls.has(p.id))return photoUrls.get(p.id);const snap=await getDoc(doc(db,'users',user.uid,'places',p.id,'photos','main'));const src=snap.exists()?snap.data().image:null;photoUrls.set(p.id,src);return src}
+$('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;const lat=Number(val('lat')),lng=Number(val('lng'));if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Invalid coordinates');
+ const cat=val('newCategory')||val('category'),group=val('newGroup')||val('group');if(!cat&&group)return toast('Select or create a category before selecting a group');
+ const save=$('placeForm').querySelector('button[type=submit]');save.disabled=true;
+ try{const p=selected,ref=p?doc(db,'users',user.uid,'places',p.id):doc(collection(db,'users',user.uid,'places'));const batch=writeBatch(db);
+ const fields={title:val('title'),description:val('description'),lat,lng,category:cat,group,rating:val('rating'),size:val('size'),visibility:val('visibility'),updatedAt:serverTimestamp(),photoExists:photoData?true:($('removePhoto').checked?false:Boolean(p?.photoExists))};
+ if(p)batch.update(ref,fields);else batch.set(ref,{...fields,createdAt:serverTimestamp()});
+ if(photoData)batch.set(doc(db,'users',user.uid,'places',ref.id,'photos','main'),{image:photoData,updatedAt:serverTimestamp()});
+ else if(p&&$('removePhoto').checked)batch.delete(doc(db,'users',user.uid,'places',ref.id,'photos','main'));
+ await batch.commit();photoUrls.delete(ref.id);$('editor').close();toast('Place saved')}catch(x){err(x)}finally{save.disabled=false}};
+$('delete').onclick=async()=>{if(!selected||!confirm('Permanently delete this place?'))return;try{const b=writeBatch(db);let ref=doc(db,'users',user.uid,'places',selected.id);b.delete(ref);if(selected.photoExists)b.delete(doc(db,'users',user.uid,'places',selected.id,'photos','main'));await b.commit();$('editor').close();toast('Place deleted')}catch(x){err(x)}};
+function csvEscape(s){const x=String(s??'');return /[",\r\n]/.test(x)?'"'+x.replaceAll('"','""')+'"':x}
+const columns=['lat','lng','title','description','rating','category','group','size','visibility'];
+$('export').onclick=()=>{const lines=[columns.join(','),...places.map(p=>columns.map(c=>csvEscape(p[c])).join(','))];let blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='my-places-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+function parseCSV(text){text=text.replace(/^\uFEFF/,'');let rows=[],row=[],cell='',quote=false;for(let i=0;i<text.length;i++){let c=text[i];if(quote){if(c==='"'&&text[i+1]==='"'){cell+='"';i++}else if(c==='"')quote=false;else cell+=c}else if(c==='"')quote=true;else if(c===','){row.push(cell);cell=''}else if(c==='\n'){row.push(cell.replace(/\r$/,''));rows.push(row);row=[];cell=''}else cell+=c}if(quote)throw Error('Unclosed quoted field');if(row.length||cell){row.push(cell);rows.push(row)}return rows}
+$('csvFile').onchange=async e=>{pending=[];try{const f=e.target.files[0];if(!f)return;const rows=parseCSV(await f.text());if(rows.length<2)throw Error('CSV has no records');const headers=rows.shift().map(s=>s.trim().toLowerCase());for(const required of ['lat','lng','title'])if(!headers.includes(required))throw Error('Missing required column: '+required);
+ let seen=new Set(),repeats=0;for(const row of rows){if(row.length===1&&!row[0])continue;const p=Object.fromEntries(headers.map((h,i)=>[h,row[i]??'']));p.lat=Number(p.lat);p.lng=Number(p.lng);if(!Number.isFinite(p.lat)||!Number.isFinite(p.lng)||Math.abs(p.lat)>90||Math.abs(p.lng)>180||!p.title?.trim())throw Error('Invalid row '+(rows.indexOf(row)+2));if(p.title.length>160||String(p.description||'').length>1500||String(p.category||'').length>60||String(p.group||'').length>60)throw Error('Text too long');let k=key(p);if(seen.has(k)){repeats++;continue}seen.add(k);pending.push({lat:p.lat,lng:p.lng,title:p.title,description:p.description||'',rating:['Perfect','Good','Bad'].includes(p.rating)?p.rating:'Good',category:p.category||'',group:p.group||'',size:['Large','Small',"Doesn't matter"].includes(p.size)?p.size:"Doesn't matter",visibility:['Perfect','Good','Bad','Not sure'].includes(p.visibility)?p.visibility:'Not sure'})}
+ let match=new Set(places.map(key));let duplicates=pending.filter(p=>match.has(key(p))).length;hide('importPanel',false);$('importSummary').textContent=pending.length+' valid rows · '+duplicates+' matching existing coordinates · '+(pending.length-duplicates)+' new · '+repeats+' repeated CSV rows ignored.'}catch(x){err(x);hide('importPanel',true)}};
+$('cancelImport').onclick=()=>{pending=[];$('csvFile').value='';hide('importPanel',true)};
+$('import').onclick=async()=>{if(!user||!pending.length)return;const overwrite=$('overwrite').checked;const existing=new Map(places.map(p=>[key(p),p]));const changes=pending.filter(p=>overwrite||!existing.has(key(p)));if(!confirm('Import '+changes.length+' places? '+(overwrite?'Matching existing entries will be overwritten (photos retained).':'Existing entries will stay unchanged.')))return;let count=0;
+ try{for(let i=0;i<changes.length;i+=400){let b=writeBatch(db);for(const p of changes.slice(i,i+400)){const old=existing.get(key(p)),ref=old?doc(db,'users',user.uid,'places',old.id):doc(collection(db,'users',user.uid,'places'));if(old)b.update(ref,{...p,updatedAt:serverTimestamp()});else b.set(ref,{...p,photoExists:false,createdAt:serverTimestamp(),updatedAt:serverTimestamp()})}await b.commit();count+=Math.min(400,changes.length-i)}
+ toast('Imported '+count+' places');pending=[];$('csvFile').value='';hide('importPanel',true)
+ }catch(x){err(x);$('importSummary').textContent='Imported '+count+' rows before error. Recheck before retrying.'}};
