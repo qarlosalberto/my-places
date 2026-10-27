@@ -5,6 +5,7 @@ import {getFirestore,collection,doc,getDoc,onSnapshot,writeBatch,serverTimestamp
 const $=id=>document.getElementById(id), hide=(id,v)=>$(id).classList.toggle('hidden',v), val=id=>$(id).value.trim();
 const key=p=>Number(p.lat).toFixed(6)+','+Number(p.lng).toFixed(6);
 let auth,db,user,places=[],unsubscribe=()=>{},selected=null,pending=[],photoData=null,photoUrls=new Map(),map,markers,userPosition=null,locationMarker=null,locatedOnce=false;
+let precisionWatch=null,precisionTimeout=null,precisionStarted=0,bestFix=null,manualAdjusted=false,precisionMap=null,precisionMarker=null,accuracyMeters=null;
 const toast=s=>{let t=$('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',4500)};
 const err=e=>{console.error(e);toast(e.message||String(e))};
 const configured=Boolean(firebaseConfig.apiKey&&!firebaseConfig.apiKey.includes('PON_AQUI')&&firebaseConfig.projectId&&!firebaseConfig.projectId.includes('PON_AQUI'));
@@ -59,14 +60,73 @@ function makeSelect(id,options,placeholder,choice=''){let sel=$(id);sel.replaceC
 function chooseGroups(choice=''){makeSelect('group',groups(val('newCategory')||val('category')),'No group',choice)}
 $('category').onchange=()=>chooseGroups();
 $('newCategory').oninput=()=>chooseGroups();
-function openEditor(p=null){selected=p;photoData=null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
+function openEditor(p=null){stopPrecision(false);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
  for(const id of ['title','description','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
- makeSelect('category',categories(),'No category',p?.category||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('editor').showModal();
+ makeSelect('category',categories(),'No category',p?.category||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('editor').showModal();initPrecisionMap();
  if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
 }
-$('new').onclick=()=>openEditor();$('close').onclick=()=>$('editor').close();
-$('gps').onclick=()=>{if(!navigator.geolocation)return toast('Geolocation unavailable');$('gpsStatus').textContent='Locating…';navigator.geolocation.getCurrentPosition(pos=>{$('lat').value=pos.coords.latitude.toFixed(7);$('lng').value=pos.coords.longitude.toFixed(7);$('gpsStatus').textContent='Location acquired (±'+Math.round(pos.coords.accuracy)+' m)'},e=>$('gpsStatus').textContent=e.message,{enableHighAccuracy:true,timeout:20000})};
+$('new').onclick=()=>openEditor();$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
+$('editor').addEventListener('close',()=>stopPrecision(false));
+function updatePrecisionPosition(lat,lng,moveView=true){
+ $('lat').value=Number(lat).toFixed(7);$('lng').value=Number(lng).toFixed(7);
+ if(!precisionMap)return;
+ const point=[Number(lat),Number(lng)];
+ if(precisionMarker)precisionMarker.setLatLng(point);
+ else {
+  precisionMarker=L.marker(point,{draggable:true}).addTo(precisionMap);
+  precisionMarker.on('dragstart',()=>{manualAdjusted=true;stopPrecision(true)});
+  precisionMarker.on('dragend',()=>{const ll=precisionMarker.getLatLng();manualAdjusted=true;accuracyMeters=null;updatePrecisionPosition(ll.lat,ll.lng,false);$('gpsStatus').textContent='Marker adjusted manually; GPS accuracy no longer applies.'});
+ }
+ if(moveView)precisionMap.setView(point,Math.max(precisionMap.getZoom(),16));
+}
+function initPrecisionMap(){
+ if(!precisionMap){
+  precisionMap=L.map('precisionMap',{zoomControl:true}).setView([40.42,-3.7],5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(precisionMap);
+ }
+ setTimeout(()=>{
+  precisionMap.invalidateSize();
+  const lat=Number(val('lat')),lng=Number(val('lng'));
+  if(val('lat')!==''&&val('lng')!==''&&Number.isFinite(lat)&&Number.isFinite(lng))updatePrecisionPosition(lat,lng);
+  else if(userPosition)precisionMap.setView(userPosition,14);
+ },100);
+}
+for(const id of ['lat','lng'])$(id).addEventListener('change',()=>{
+ if(val('lat')===''||val('lng')==='')return;
+ const lat=Number(val('lat')),lng=Number(val('lng'));
+ if(Number.isFinite(lat)&&Math.abs(lat)<=90&&Number.isFinite(lng)&&Math.abs(lng)<=180){
+  manualAdjusted=true;accuracyMeters=null;stopPrecision(false);updatePrecisionPosition(lat,lng);
+  $('gpsStatus').textContent='Coordinates changed manually.';
+ }
+});
+function stopPrecision(show=true){
+ if(precisionWatch!==null){navigator.geolocation?.clearWatch(precisionWatch);precisionWatch=null}
+ if(precisionTimeout!==null){clearTimeout(precisionTimeout);precisionTimeout=null}
+ $('gps').disabled=false;$('gps').textContent='⌖ Capture precise location';hide('stopGps',true);
+ if(show&&bestFix)$('gpsStatus').textContent='Best GPS estimate: ±'+Math.round(bestFix.coords.accuracy)+' m. Drag marker to refine.';
+}
+$('stopGps').onclick=()=>stopPrecision(true);
+$('gps').onclick=()=>{
+ if(!window.isSecureContext||!navigator.geolocation){$('gpsStatus').textContent='Location unavailable. Enable location services and use HTTPS.';return}
+ stopPrecision(false);bestFix=null;manualAdjusted=false;accuracyMeters=null;precisionStarted=Date.now();
+ $('gps').disabled=true;$('gps').textContent='⌖ Measuring…';hide('stopGps',false);
+ $('gpsStatus').textContent='Looking for an accurate GPS fix (up to 30 seconds)…';
+ precisionTimeout=setTimeout(()=>stopPrecision(true),30000);
+ precisionWatch=navigator.geolocation.watchPosition(pos=>{
+  if(!Number.isFinite(pos.coords.latitude)||!Number.isFinite(pos.coords.longitude)||!Number.isFinite(pos.coords.accuracy))return;
+  if(!bestFix||pos.coords.accuracy<bestFix.coords.accuracy){
+   bestFix=pos;accuracyMeters=pos.coords.accuracy;updatePrecisionPosition(pos.coords.latitude,pos.coords.longitude);
+  }
+  const accuracy=Math.round(bestFix.coords.accuracy);
+  const grade=accuracy<=5?'Excellent':accuracy<=15?'Good':'Low';
+  $('gpsStatus').textContent='Best accuracy: ±'+accuracy+' m ('+grade+'). Measuring… '+Math.min(30,Math.round((Date.now()-precisionStarted)/1000))+'/30 s';
+  if(accuracy<=5)stopPrecision(true);
+ },e=>{
+  $('gpsStatus').textContent=e.code===1?'Location permission denied. Enable site location permission.':e.code===3?'GPS timed out. Try again outdoors.':e.message;
+  stopPrecision(false);
+ },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+};
 async function compress(f){const img=await createImageBitmap(f);let scale=Math.min(1,800/img.width,800/img.height);const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);img.close();for(const quality of [.7,.5,.35,.2]){const data=c.toDataURL('image/jpeg',quality);if(data.length<210000)return data}throw Error('Image too large after compression. Choose another image.')}
 $('photo').onchange=async e=>{if(!e.target.files[0])return;try{photoData=await compress(e.target.files[0]);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;$('photoPreview').append(img)}catch(x){err(x)}};
 async function getPhoto(p){if(photoUrls.has(p.id))return photoUrls.get(p.id);const snap=await getDoc(doc(db,'users',user.uid,'places',p.id,'photos','main'));const src=snap.exists()?snap.data().image:null;photoUrls.set(p.id,src);return src}
@@ -74,12 +134,12 @@ $('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;const lat=N
  const cat=val('newCategory')||val('category'),group=val('newGroup')||val('group');if(!cat&&group)return toast('Select or create a category before selecting a group');
  const save=$('placeForm').querySelector('button[type=submit]');save.disabled=true;
  try{const p=selected,ref=p?doc(db,'users',user.uid,'places',p.id):doc(collection(db,'users',user.uid,'places'));const batch=writeBatch(db);
- const fields={title:val('title'),description:val('description'),lat,lng,category:cat,group,rating:val('rating'),size:val('size'),visibility:val('visibility'),updatedAt:serverTimestamp(),photoExists:photoData?true:($('removePhoto').checked?false:Boolean(p?.photoExists))};
+ const fields={title:val('title'),description:val('description'),lat,lng,category:cat,group,rating:val('rating'),size:val('size'),visibility:val('visibility'),accuracyMeters:manualAdjusted?null:accuracyMeters,locationManual:manualAdjusted,updatedAt:serverTimestamp(),photoExists:photoData?true:($('removePhoto').checked?false:Boolean(p?.photoExists))};
  if(p)batch.update(ref,fields);else batch.set(ref,{...fields,createdAt:serverTimestamp()});
  if(photoData)batch.set(doc(db,'users',user.uid,'places',ref.id,'photos','main'),{image:photoData,updatedAt:serverTimestamp()});
  else if(p&&$('removePhoto').checked)batch.delete(doc(db,'users',user.uid,'places',ref.id,'photos','main'));
- await batch.commit();photoUrls.delete(ref.id);$('editor').close();toast('Place saved')}catch(x){err(x)}finally{save.disabled=false}};
-$('delete').onclick=async()=>{if(!selected||!confirm('Permanently delete this place?'))return;try{const b=writeBatch(db);let ref=doc(db,'users',user.uid,'places',selected.id);b.delete(ref);if(selected.photoExists)b.delete(doc(db,'users',user.uid,'places',selected.id,'photos','main'));await b.commit();$('editor').close();toast('Place deleted')}catch(x){err(x)}};
+ await batch.commit();photoUrls.delete(ref.id);stopPrecision(false);$('editor').close();toast('Place saved')}catch(x){err(x)}finally{save.disabled=false}};
+$('delete').onclick=async()=>{if(!selected||!confirm('Permanently delete this place?'))return;try{const b=writeBatch(db);let ref=doc(db,'users',user.uid,'places',selected.id);b.delete(ref);if(selected.photoExists)b.delete(doc(db,'users',user.uid,'places',selected.id,'photos','main'));await b.commit();stopPrecision(false);$('editor').close();toast('Place deleted')}catch(x){err(x)}};
 function csvEscape(s){const x=String(s??'');return /[",\r\n]/.test(x)?'"'+x.replaceAll('"','""')+'"':x}
 const columns=['lat','lng','title','description','rating','category','group','size','visibility'];
 $('export').onclick=()=>{const lines=[columns.join(','),...places.map(p=>columns.map(c=>csvEscape(p[c])).join(','))];let blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='my-places-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
