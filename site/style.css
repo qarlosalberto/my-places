@@ -6,3 +6,28 @@
 .filterToolbar #locate{background:#e9f2ff;border-color:#d6e7ff}
 .filters:not(.hidden){background:#fff;border:1px solid #e1e8f4;border-radius:15px;padding:13px;margin:0 0 13px;box-shadow:0 4px 18px #223c670b}
 @media(max-width:520px){.filterToolbar{margin:12px 0 9px}.filterToolbar button{padding:10px 12px;font-size:14px;flex:1}.filters:not(.hidden){grid-template-columns:1fr 1fr;padding:10px}.filters input{grid-column:1/-1}#map{min-height:360px;height:calc(100dvh - 245px);max-height:760px}}
+
+/* Mobile map-first layout */
+.locationStatus{font-size:12px;color:#536e91;min-height:0;line-height:1.4}
+.locationStatus:empty{display:none}
+.locationStatus:not(:empty){padding:5px 2px 8px}
+.locationStatus.locationError{color:#ac3e31}
+@media(max-width:600px){
+ header{padding:9px 14px;min-height:62px}
+ .logo{width:36px;height:36px;line-height:36px;font-size:23px;border-radius:10px}
+ .brand{gap:9px}
+ .brand strong{font-size:17px}
+ #logout{font-size:13px;padding:8px 10px}
+ main{padding:11px 12px 40px}
+ .top{align-items:center;gap:8px}
+ .top h1{font-size:21px;line-height:1.15;margin:0}
+ .top p{display:none}
+ .top .primary{padding:9px 12px;font-size:13px;border-radius:10px}
+ .filterToolbar{margin:11px 0 9px;gap:9px}
+ .filterToolbar button{padding:9px 10px;min-height:40px;border-radius:11px;white-space:nowrap;font-size:13px}
+ .tabs{margin-bottom:9px}
+ .tabs button{padding:9px 12px;font-size:13px;border-radius:10px}
+ .tabs span{font-size:12px}
+ #map{height:calc(100dvh - 280px);min-height:350px;max-height:none;border-radius:13px}
+ .leaflet-control-zoom a{width:32px!important;height:32px!important;line-height:32px!important}
+}
