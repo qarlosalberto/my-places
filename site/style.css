@@ -62,3 +62,33 @@
 .mapPicker label{font-size:13px;font-weight:700;color:#486282;white-space:nowrap}
 .mapPicker select{flex:1;min-width:0;font-size:16px;font-weight:650;border:0;background:#f1f6ff;color:#1855ad}
 @media(max-width:600px){.mapPicker{margin:11px 0 8px;padding:8px 10px;gap:8px}.mapPicker select{font-size:15px;padding:9px}}
+
+/* Unified map toolbar - maximize map viewport */
+.compactToolbar{display:flex;align-items:center;gap:7px;margin:8px 0 6px;min-width:0}
+.compactToolbar .mapPicker{flex:1;min-width:120px;margin:0;padding:0;border:0;background:transparent}
+.compactToolbar .mapPicker select{width:100%;background:#fff;border:1px solid #dce5f4;border-radius:10px;height:42px;padding:7px 11px;font-weight:650}
+.compactToolbar button{height:42px;padding:8px 11px;white-space:nowrap;border-radius:10px;flex-shrink:0}
+.compactToolbar .tabs{display:flex;align-items:center;gap:3px;margin:0}
+.compactToolbar .tabs button{padding:7px 10px}
+.compactToolbar .compactNew{padding:8px 13px}
+.compactToolbar #locate{font-size:23px;padding:4px 11px}
+.resultCount{font-size:11px;color:#74859f;text-align:right;margin:0 2px 4px}
+.compactToolbar #toggleFilters[aria-expanded="true"]{background:#e1edff;border-color:#afcaff}
+@media(max-width:650px){
+ .compactToolbar{gap:5px;margin:3px 0 5px}
+ .compactToolbar .mapPicker{min-width:82px}
+ .compactToolbar .mapPicker select{height:38px;padding:6px;font-size:13px}
+ .compactToolbar button{height:38px;font-size:13px;padding:6px 8px}
+ .compactToolbar .tabs{gap:1px}
+ .compactToolbar .tabs button{padding:6px 8px}
+ .compactToolbar .compactNew{padding:6px 9px}
+ .compactToolbar .compactNew span,.compactToolbar .compactLabel{display:none}
+ .compactToolbar #locate{font-size:20px;padding:4px 8px}
+ .resultCount{margin-bottom:3px}
+ #map{height:calc(100dvh - 174px);min-height:390px}
+}
+@media(max-width:375px){
+ .compactToolbar .tabs button{font-size:12px;padding:6px 5px}
+ .compactToolbar button{padding:6px}
+ .compactToolbar .mapPicker select{font-size:12px}
+}
