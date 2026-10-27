@@ -128,7 +128,11 @@ $('gps').onclick=()=>{
  },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 };
 async function compress(f){const img=await createImageBitmap(f);let scale=Math.min(1,800/img.width,800/img.height);const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);img.close();for(const quality of [.7,.5,.35,.2]){const data=c.toDataURL('image/jpeg',quality);if(data.length<210000)return data}throw Error('Image too large after compression. Choose another image.')}
-$('photo').onchange=async e=>{if(!e.target.files[0])return;try{photoData=await compress(e.target.files[0]);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;$('photoPreview').append(img)}catch(x){err(x)}};
+async function selectedPhoto(e){const file=e.target.files?.[0];if(!file)return;try{photoData=await compress(file);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;img.alt='Selected place photo';$('photoPreview').append(img);$('removePhoto').checked=false;toast('Photo ready to save')}catch(x){err(x)}finally{e.target.value=''}}
+$('takePhoto').onclick=()=>$('cameraPhoto').click();
+$('choosePhoto').onclick=()=>$('photo').click();
+$('cameraPhoto').onchange=selectedPhoto;
+$('photo').onchange=selectedPhoto;
 async function getPhoto(p){if(photoUrls.has(p.id))return photoUrls.get(p.id);const snap=await getDoc(doc(db,'users',user.uid,'places',p.id,'photos','main'));const src=snap.exists()?snap.data().image:null;photoUrls.set(p.id,src);return src}
 $('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;const lat=Number(val('lat')),lng=Number(val('lng'));if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Invalid coordinates');
  const cat=val('newCategory')||val('category'),group=val('newGroup')||val('group');if(!cat&&group)return toast('Select or create a category before selecting a group');
