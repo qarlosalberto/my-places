@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id), hide=(id,v)=>$(id).classList.toggle('hi
 const key=p=>Number(p.lat).toFixed(6)+','+Number(p.lng).toFixed(6);
 let auth,db,user,places=[],unsubscribe=()=>{},selected=null,pending=[],photoData=null,photoUrls=new Map(),map,markers,userPosition=null,locationMarker=null,locatedOnce=false;
 let precisionWatch=null,precisionTimeout=null,precisionStarted=0,bestFix=null,manualAdjusted=false,precisionMap=null,precisionMarker=null,accuracyMeters=null;
-let titleManuallyEdited=false,addressSequence=0,lastAddressCall=0;const addressCache=new Map();
+let trackingWatch=null,latestTrackingFix=null;let titleManuallyEdited=false,addressSequence=0,lastAddressCall=0;const addressCache=new Map();
 const toast=s=>{let t=$('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',4500)};
 const err=e=>{console.error(e);toast(e.message||String(e))};
 const configured=Boolean(firebaseConfig.apiKey&&!firebaseConfig.apiKey.includes('PON_AQUI')&&firebaseConfig.projectId&&!firebaseConfig.projectId.includes('PON_AQUI'));
@@ -15,7 +15,7 @@ if(!configured){hide('setup',false);$('login').disabled=true}else{
  $('login').onclick=()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(err);
  $('logout').onclick=()=>signOut(auth).catch(err);
  onAuthStateChanged(auth,async u=>{
-  unsubscribe();unsubscribe=()=>{};user=null;places=[];photoUrls.clear();
+  unsubscribe();unsubscribe=()=>{};if(!u)stopTracking();user=null;places=[];photoUrls.clear();
   hide('login',!!u);hide('logout',!u);$('identity').textContent=u?.email||'';hide('dashboard',true);hide('denied',true);
   if(!u)return;
   try{
@@ -149,7 +149,7 @@ $('newCategory').oninput=()=>chooseGroups();
 function openEditor(p=null){stopPrecision(false);addressSequence++;titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
  for(const id of ['title','description','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
- makeSelect('category',categories(),'Select a map',p?.map||val('activeMap')||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('editor').showModal();initPrecisionMap();
+ makeSelect('category',categories(),'Select a map',p?.map||val('activeMap')||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('editor').showModal();initPrecisionMap();if(!p&&recentTrackingFix())useTrackingFix();
  if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
 }
 $('new').onclick=()=>openEditor();$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
@@ -186,6 +186,15 @@ for(const id of ['lat','lng'])$(id).addEventListener('change',()=>{
   $('gpsStatus').textContent='Coordinates changed manually.';lookupAddress(lat,lng);
  }
 });
+function useTrackingFix(){
+ const fix=recentTrackingFix();
+ if(!fix){$('gpsStatus').textContent='Waiting for a fresh tracking position…';return false}
+ bestFix=fix;manualAdjusted=false;accuracyMeters=fix.coords.accuracy;
+ updatePrecisionPosition(fix.coords.latitude,fix.coords.longitude);
+ $('gpsStatus').textContent='Tracking GPS fix: ±'+Math.round(accuracyMeters)+' m · Ready to save.';
+ lookupAddress(fix.coords.latitude,fix.coords.longitude);
+ return true;
+}
 function stopPrecision(show=true){
  if(precisionWatch!==null){navigator.geolocation?.clearWatch(precisionWatch);precisionWatch=null}
  if(precisionTimeout!==null){clearTimeout(precisionTimeout);precisionTimeout=null}
@@ -195,6 +204,7 @@ function stopPrecision(show=true){
 $('stopGps').onclick=()=>stopPrecision(true);
 $('gps').onclick=()=>{
  if(!window.isSecureContext||!navigator.geolocation){$('gpsStatus').textContent='Location unavailable. Enable location services and use HTTPS.';return}
+ if(trackingWatch!==null){if(useTrackingFix())return;$('gpsStatus').textContent='Tracking is on; waiting for a recent GPS fix.';return}
  stopPrecision(false);bestFix=null;manualAdjusted=false;accuracyMeters=null;precisionStarted=Date.now();
  $('gps').disabled=true;$('gps').textContent='⌖ Measuring…';hide('stopGps',false);
  $('gpsStatus').textContent='Looking for an accurate GPS fix (up to 30 seconds)…';
@@ -291,6 +301,30 @@ $('import').onclick=async()=>{if(!user||!pending.length)return;const overwrite=$
  toast('Imported '+count+' places');pending=[];$('csvFile').value='';hide('importPanel',true)
  }catch(x){err(x);$('importSummary').textContent='Imported '+count+' rows before error. Recheck before retrying.'}};
 
+
+function stopTracking(){
+ if(trackingWatch!==null){navigator.geolocation?.clearWatch(trackingWatch);trackingWatch=null}
+ latestTrackingFix=null;
+ const button=$('tracking');button.setAttribute('aria-pressed','false');button.title='Start GPS tracking';button.textContent='◎';button.classList.remove('trackingActive');
+}
+function startTracking(){
+ if(!navigator.geolocation||!window.isSecureContext){$('locationStatus').textContent='GPS tracking requires HTTPS and location permission.';return}
+ const button=$('tracking');
+ button.title='Stop GPS tracking';button.textContent='●';button.setAttribute('aria-pressed','true');button.classList.add('trackingActive');
+ $('locationStatus').textContent='Tracking GPS… Waiting for position.';
+ trackingWatch=navigator.geolocation.watchPosition(pos=>{
+  latestTrackingFix=pos;
+  userPosition=[pos.coords.latitude,pos.coords.longitude];
+  if(map){
+   if(locationMarker)locationMarker.setLatLng(userPosition);
+   else locationMarker=L.circleMarker(userPosition,{radius:9,color:'#fff',weight:3,fillColor:'#236bd5',fillOpacity:1}).addTo(map).bindTooltip('You are here');
+  }
+  $('locationStatus').textContent='Tracking ON · GPS ±'+Math.round(pos.coords.accuracy)+' m';
+ },e=>{$('locationStatus').textContent='Tracking stopped: '+(e.code===1?'Location permission denied.':e.message);stopTracking()},
+ {enableHighAccuracy:true,maximumAge:0,timeout:25000});
+}
+$('tracking').onclick=()=>{if(trackingWatch!==null)stopTracking();else startTracking()};
+function recentTrackingFix(){return latestTrackingFix&&Date.now()-latestTrackingFix.timestamp<12000?latestTrackingFix:null}
 function locateUser(initial=false){
  const button=$('locate');
  const setStatus=(message,isError=false)=>{
