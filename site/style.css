@@ -56,3 +56,9 @@
 .titleField button{position:absolute;right:5px;top:50%;transform:translateY(-50%);min-width:34px;width:34px;height:34px;padding:0;font-size:23px;line-height:1;border:0;background:transparent;color:#637997;border-radius:8px}
 .titleField button:hover{background:#edf3ff;color:#174c99}
 #addressStatus{font-size:12px;margin:4px 0 10px;color:#687c9c}
+
+/* Primary map selector: shown above map/list and filters */
+.mapPicker{display:flex;align-items:center;gap:12px;background:white;border:1px solid #dce5f4;border-radius:14px;padding:11px 14px;margin:16px 0 8px}
+.mapPicker label{font-size:13px;font-weight:700;color:#486282;white-space:nowrap}
+.mapPicker select{flex:1;min-width:0;font-size:16px;font-weight:650;border:0;background:#f1f6ff;color:#1855ad}
+@media(max-width:600px){.mapPicker{margin:11px 0 8px;padding:8px 10px;gap:8px}.mapPicker select{font-size:15px;padding:9px}}
