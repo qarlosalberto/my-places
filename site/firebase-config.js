@@ -1,9 +1,9 @@
-// Firebase WEB configuration (public client identifiers, never an admin key).
-// Paste the Firebase web app values here.
+// Public Firebase client configuration. Access is enforced by Firestore security rules.
 export const firebaseConfig = {
- apiKey: "PON_AQUI_API_KEY",
- authDomain: "PON_AQUI_PROJECT_ID.firebaseapp.com",
- projectId: "PON_AQUI_PROJECT_ID",
- messagingSenderId: "PON_AQUI_MESSAGING_SENDER_ID",
- appId: "PON_AQUI_APP_ID"
+  apiKey: "AIzaSyBDfKKLoG1MM4yq4Rllcn1ZcwzzXQIWVOw",
+  authDomain: "my-places-dd7fa.firebaseapp.com",
+  projectId: "my-places-dd7fa",
+  storageBucket: "my-places-dd7fa.firebasestorage.app",
+  messagingSenderId: "466924800130",
+  appId: "1:466924800130:web:72c9901c9d89e85d5a0c9b"
 };
