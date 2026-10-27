@@ -117,7 +117,11 @@ $('gps').onclick=()=>{
  precisionWatch=navigator.geolocation.watchPosition(pos=>{
   if(!Number.isFinite(pos.coords.latitude)||!Number.isFinite(pos.coords.longitude)||!Number.isFinite(pos.coords.accuracy))return;
   if(!bestFix||pos.coords.accuracy<bestFix.coords.accuracy){
+   const firstFix=!bestFix;
    bestFix=pos;accuracyMeters=pos.coords.accuracy;updatePrecisionPosition(pos.coords.latitude,pos.coords.longitude);
+   // Populate Title as soon as the first valid position is available.
+   // Keep manual titles intact; address lookup handles failures gracefully.
+   if(firstFix)lookupAddress(pos.coords.latitude,pos.coords.longitude);
   }
   const accuracy=Math.round(bestFix.coords.accuracy);
   const grade=accuracy<=5?'Excellent':accuracy<=15?'Good':'Low';
