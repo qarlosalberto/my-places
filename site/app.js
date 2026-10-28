@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id), hide=(id,v)=>$(id).classList.toggle('hi
 const key=p=>Number(p.lat).toFixed(6)+','+Number(p.lng).toFixed(6);
 let auth,db,user,places=[],unsubscribe=()=>{},selected=null,pending=[],photoData=null,photoUrls=new Map(),map,markers,userPosition=null,locationMarker=null,locatedOnce=false;
 let precisionWatch=null,precisionTimeout=null,precisionStarted=0,bestFix=null,manualAdjusted=false,precisionMap=null,precisionMarker=null,accuracyMeters=null;
-let trackingWatch=null,latestTrackingFix=null;let titleManuallyEdited=false,addressSequence=0,lastAddressCall=0;const addressCache=new Map();
+let trackingWatch=null,latestTrackingFix=null;let titleManuallyEdited=false,addressSequence=0,lastAddressCall=0,lastResolvedAddress='';const addressCache=new Map();
 const toast=s=>{let t=$('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',4500)};
 const err=e=>{console.error(e);toast(e.message||String(e))};
 const configured=Boolean(firebaseConfig.apiKey&&!firebaseConfig.apiKey.includes('PON_AQUI')&&firebaseConfig.projectId&&!firebaseConfig.projectId.includes('PON_AQUI'));
@@ -91,7 +91,7 @@ function makeSelect(id,options,placeholder,choice=''){let sel=$(id);sel.replaceC
 function chooseGroups(choice=''){makeSelect('group',groups(val('newCategory')||val('category')),'No group',choice)}
 $('category').onchange=()=>chooseGroups();
 $('newCategory').oninput=()=>chooseGroups();
-function openEditor(p=null){stopPrecision(false);addressSequence++;titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
+function openEditor(p=null){stopPrecision(false);addressSequence++;lastResolvedAddress='';titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
  for(const id of ['title','description','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
  makeSelect('category',categories(),'Select a map',p?.map||val('activeMap')||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('editor').showModal();initPrecisionMap();if(!p&&recentTrackingFix())useTrackingFix();
@@ -179,7 +179,7 @@ async function lookupAddress(lat,lng){
  if(titleManuallyEdited||val('title')||!Number.isFinite(Number(lat))||!Number.isFinite(Number(lng)))return;
  const key=Number(lat).toFixed(5)+','+Number(lng).toFixed(5);
  const seq=++addressSequence;
- const apply=name=>{if(seq===addressSequence&&!titleManuallyEdited&&!val('title')&&$('editor').open){$('title').value=name.slice(0,160);$('addressStatus').textContent='Suggested address · © OpenStreetMap contributors. You can edit it.'}};
+ const apply=name=>{if(seq===addressSequence&&$('editor').open){lastResolvedAddress=name.slice(0,160)}if(seq===addressSequence&&!titleManuallyEdited&&!val('title')&&$('editor').open){$('title').value=name.slice(0,160);$('addressStatus').textContent='Suggested address · © OpenStreetMap contributors. You can edit it.'}};
  if(addressCache.has(key)){const name=addressCache.get(key);if(name)apply(name);return}
  $('addressStatus').textContent='Looking up address…';
  try{
@@ -225,9 +225,10 @@ $('photo').onchange=selectedPhoto;
 async function getPhoto(p){if(photoUrls.has(p.id))return photoUrls.get(p.id);const snap=await getDoc(doc(db,'users',user.uid,'places',p.id,'photos','main'));const src=snap.exists()?snap.data().image:null;photoUrls.set(p.id,src);return src}
 $('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;const lat=Number(val('lat')),lng=Number(val('lng'));if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Invalid coordinates');
  const cat=val('newCategory')||val('category'),group=val('newGroup')||val('group');if(!cat)return toast('Select or create a map');
+ const fallbackTitle=lastResolvedAddress||addressCache.get(lat.toFixed(5)+','+lng.toFixed(5))||lat.toFixed(7)+', '+lng.toFixed(7);const finalTitle=val('title')||fallbackTitle;$('title').value=finalTitle;
  const save=$('placeForm').querySelector('button[type=submit]');save.disabled=true;
  try{const p=selected,ref=p?doc(db,'users',user.uid,'places',p.id):doc(collection(db,'users',user.uid,'places'));const batch=writeBatch(db);
- const fields={title:val('title'),description:val('description'),lat,lng,map:cat,group,rating:val('rating'),size:val('size'),visibility:val('visibility'),accuracyMeters:manualAdjusted?null:accuracyMeters,locationManual:manualAdjusted,updatedAt:serverTimestamp(),photoExists:photoData?true:($('removePhoto').checked?false:Boolean(p?.photoExists))};
+ const fields={title:finalTitle,description:val('description'),lat,lng,map:cat,group,rating:val('rating'),size:val('size'),visibility:val('visibility'),accuracyMeters:manualAdjusted?null:accuracyMeters,locationManual:manualAdjusted,updatedAt:serverTimestamp(),photoExists:photoData?true:($('removePhoto').checked?false:Boolean(p?.photoExists))};
  if(p)batch.update(ref,fields);else batch.set(ref,{...fields,createdAt:serverTimestamp()});
  if(photoData)batch.set(doc(db,'users',user.uid,'places',ref.id,'photos','main'),{image:photoData,updatedAt:serverTimestamp()});
  else if(p&&$('removePhoto').checked)batch.delete(doc(db,'users',user.uid,'places',ref.id,'photos','main'));
