@@ -1,0 +1,33 @@
+name: CI · atlas y carteles
+on:
+  push:
+    branches: [main, feature/atlas-electoral-zaragoza]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check syntax
+        run: |
+          node --input-type=module --check < site/app.js
+          node --input-type=module --check < site/atlas.js
+      - name: Validate static data
+        run: python3 scripts/validate_atlas.py
+      - name: Unit and integration checks
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          node --test tests/*.test.mjs
+  inspect-official-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect Aragón public datasets (non-blocking source diagnostics)
+        run: python3 scripts/probe_sources.py
