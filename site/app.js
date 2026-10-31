@@ -16,7 +16,7 @@ function showRoute(){
  hide('home',page!=='home');hide('atlas',page!=='atlas');hide('dashboard',page!=='carteles'||!user);
  hide('cartelesGate',page!=='carteles'||!!user);
  if(page==='atlas')showAtlas();
- if(page==='carteles'&&user){initMap();setTimeout(()=>map?.invalidateSize(),80)}
+ if(page==='carteles'&&user){initMap();render();setTimeout(()=>map?.invalidateSize(),80)}
 }
 window.addEventListener('hashchange',showRoute);
 showRoute();
