@@ -309,3 +309,79 @@ $('locate').onclick=()=>locateUser(false);
 $('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains('hidden');hide('filters',!expanding);$('toggleFilters').setAttribute('aria-expanded',String(expanding));$('toggleFilters').innerHTML='⚙ <span class="compactLabel">Filters</span> <span id="filterCount"></span>';updateFilterBadge()};
 function updateFilterBadge(){const count=['search','filterGroup','filterRating','filterSize','filterVisibility'].filter(id=>val(id)).length;const badge=$('filterCount');if(badge)badge.textContent=count?'('+count+')':''}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',updateFilterBadge);
+
+/* PDF report of the currently selected map and filters */
+function loadReportScript(src,globalName){
+ if(window[globalName])return Promise.resolve();
+ return new Promise((resolve,reject)=>{
+  const el=document.createElement('script');el.src=src;el.onload=()=>window[globalName]?resolve():reject(Error('PDF library unavailable'));el.onerror=()=>reject(Error('Could not load PDF library'));document.head.append(el);
+ });
+}
+async function exportFilteredPdf(){
+ const button=$('exportPdf'),items=relevant();
+ if(!items.length){toast('No places match the current filters.');return}
+ const valid=items.filter(p=>Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180);
+ if(!valid.length){toast('No valid coordinates to map.');return}
+ button.disabled=true;button.textContent='Preparing PDF…';
+ let canvasMap=null,previewMap=null;
+ try{
+  await Promise.all([
+   loadReportScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js','jspdf'),
+   loadReportScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js','html2canvas')
+  ]);
+  const container=document.createElement('div');
+  canvasMap=container;
+  Object.assign(container.style,{position:'fixed',left:'0',top:'-1200px',width:'900px',height:'510px',zIndex:'-1',background:'#e6edf4'});
+  document.body.append(container);
+  previewMap=L.map(container,{zoomControl:false,attributionControl:false,fadeAnimation:false,zoomAnimation:false});
+  const tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,crossOrigin:true});
+  tiles.addTo(previewMap);
+  const bounds=L.latLngBounds(valid.map(p=>[Number(p.lat),Number(p.lng)]));
+  if(valid.length===1)previewMap.setView(bounds.getCenter(),14);
+  else previewMap.fitBounds(bounds,{padding:[55,55],maxZoom:14,animate:false});
+  valid.forEach((p,index)=>{
+   const point=[Number(p.lat),Number(p.lng)];
+   L.circleMarker(point,{radius:11,color:'#ffffff',weight:3,fillColor:'#236bd5',fillOpacity:1}).addTo(previewMap);
+   L.marker(point,{icon:L.divIcon({className:'pdfPlaceNumber',html:'<span>'+String(index+1)+'</span>',iconSize:[24,24],iconAnchor:[12,12]})}).addTo(previewMap);
+  });
+  previewMap.invalidateSize();
+  await Promise.race([new Promise(resolve=>tiles.once('load',resolve)),new Promise(resolve=>setTimeout(resolve,5500))]);
+  await new Promise(resolve=>setTimeout(resolve,300));
+  const image=await window.html2canvas(container,{useCORS:true,allowTaint:false,backgroundColor:'#e6edf4',scale:1,logging:false});
+  const {jsPDF}=window.jspdf;const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,M=14,usable=W-2*M;
+  const currentMap=val('activeMap')||'My Places';
+  let y=18;
+  pdf.setFont('helvetica','bold');pdf.setFontSize(21);pdf.setTextColor(25,53,93);pdf.text('My Places',M,y);
+  y+=9;pdf.setFontSize(12);pdf.text(currentMap,M,y);y+=8;
+  pdf.setFont('helvetica','normal');pdf.setFontSize(9);pdf.setTextColor(95,113,138);
+  const filterInfo=[['Group','filterGroup'],['Rating','filterRating'],['Size','filterSize'],['Visibility','filterVisibility'],['Search','search']]
+    .filter(([,id])=>val(id)).map(([name,id])=>name+': '+val(id)).join('  |  ');
+  if(filterInfo){for(const line of pdf.splitTextToSize(filterInfo,usable)){pdf.text(line,M,y);y+=5}}
+  pdf.text(valid.length+' places  •  '+new Date().toLocaleDateString('en-GB'),M,y);y+=6;
+  const mapHeight=usable*510/900;
+  pdf.addImage(image.toDataURL('image/jpeg',0.87),'JPEG',M,y,usable,mapHeight);y+=mapHeight+9;
+  pdf.setFont('helvetica','bold');pdf.setTextColor(25,53,93);pdf.setFontSize(13);pdf.text('Places',M,y);y+=8;
+  for(let i=0;i<valid.length;i++){
+   const p=valid[i];
+   const heading=(i+1)+'. '+(p.title||'Untitled place');
+   const line=[p.group||'No group','Rating: '+(p.rating||'Good'),'Size: '+(p.size||"Doesn't matter"),'Visibility: '+(p.visibility||'Not sure')].join('  |  ');
+   const coords=Number(p.lat).toFixed(7)+', '+Number(p.lng).toFixed(7);
+   const titleLines=pdf.splitTextToSize(heading,usable);
+   const detailLines=pdf.splitTextToSize(line,usable);
+   const descLines=p.description?pdf.splitTextToSize(String(p.description),usable):[];
+   const needed=titleLines.length*5.2+detailLines.length*4.4+descLines.length*4.4+10;
+   if(y+Math.min(needed,24)>280){pdf.addPage();y=20}
+   pdf.setFont('helvetica','bold');pdf.setFontSize(10);pdf.setTextColor(28,65,117);
+   for(const t of titleLines){if(y>283){pdf.addPage();y=20}pdf.text(t,M,y);y+=5.2}
+   pdf.setFont('helvetica','normal');pdf.setFontSize(8.4);pdf.setTextColor(75,90,112);
+   for(const t of detailLines.concat([coords]).concat(descLines)){if(y>283){pdf.addPage();y=20}pdf.text(t,M,y);y+=4.4}
+   y+=5;
+  }
+  const cleanName=currentMap.replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').slice(0,55)||'places';
+  pdf.save('My-Places-'+cleanName+'.pdf');
+  toast('PDF downloaded with '+valid.length+' places.');
+ }catch(e){err(e)}
+ finally{if(previewMap)previewMap.remove();if(canvasMap)canvasMap.remove();button.disabled=false;button.textContent='⬇ Export PDF'}
+}
+$('exportPdf').onclick=exportFilteredPdf;
