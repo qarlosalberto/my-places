@@ -101,7 +101,17 @@ function refreshPins(){
 function renderLegend(diff){
  empty(el('atlasLegend'));
  if(diff){appendSwatch('Disminución','#d97b4b');appendSwatch('Sin cambio / similar','#d1d7df');appendSwatch('Aumento','#4c95b0');return}
- if(metric()==='winner'){state.catalog.groups.forEach(g=>appendSwatch(g.label,g.color||'#557cae'));appendSwatch('Sin datos','#dde3eb')}
+ if(metric()==='winner'){
+  const counts=new Map();
+  for(const row of dataFor(election())?.records||[]){
+    for(const [group,n] of Object.entries(row.votes||{}))
+      counts.set(group,(counts.get(group)||0)+Number(n||0));
+  }
+  const top=[...counts].sort((a,b)=>b[1]-a[1]).slice(0,12);
+  for(const [group] of top)appendSwatch(groupInfo(group).label,partyColor(group));
+  if(counts.size>top.length)appendSwatch('Otras candidaturas','#9097a4');
+  appendSwatch('Sin datos','#dde3eb');
+ }
  else {appendSwatch('Menor valor','#d9e9fb');appendSwatch('Mayor valor','#2674ad');appendSwatch('Sin datos','#dde3eb')}
 }
 function selectionLabel(e){return e?.label||'Elección sin definir'}

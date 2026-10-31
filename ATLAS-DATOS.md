@@ -2,9 +2,9 @@
 
 ## Situación actual — 31 de octubre de 2026
 
-La web tiene mapa, comparador, series históricas, participación y capa optativa de lugares privados. El catálogo **sí contiene datos reales**: actualmente **37 capas**, que incluyen elecciones generales, municipales y europeas entre 2000 y 2024; el número representa combinaciones de convocatoria y escala geográfica, **no 37 convocatorias distintas**. Hay 293 polígonos municipales y 1208 polígonos de secciones de referencia, pero la cobertura efectiva varía por convocatoria.
+La web tiene mapa, comparador, series históricas, participación y capa optativa de lugares privados. El catálogo **sí contiene datos reales**: actualmente **45 capas**, que incluyen elecciones generales, municipales y europeas entre 2000 y 2024, y autonómicas de Aragón desde 2003 hasta 2026; el número representa combinaciones de convocatoria y escala geográfica, **no 37 convocatorias distintas**. Hay 293 polígonos municipales y 1208 polígonos de secciones de referencia, pero la cobertura efectiva varía por convocatoria.
 
-**Pendiente:** elecciones autonómicas de Aragón (incluidas las de febrero de 2026), y cobertura histórica más homogénea en municipios y secciones. No se representan como disponibles hasta incorporar y validar los datos. El selector refleja únicamente las convocatorias presentes.
+**Incorporadas:** autonómicas de 2003, 2007, 2011, 2015, 2019, 2023 y 2026, con detalle municipal, y 2026 por sección al agregar mesas con código coincidente. **Pendiente:** mejorar la correspondencia cartográfica histórica y la cobertura por sección de las autonómicas anteriores. No se celebró una convocatoria de estos cuatro tipos en Zaragoza en 2025.
 
 ## Origen, atribución y descarga reproducible
 
@@ -15,11 +15,11 @@ Los resultados electorales de este primer lote proceden de los CSV abiertos publ
 - Fuente primaria del Ministerio del Interior: https://infoelectoral.interior.gob.es/
 - Cartografía de municipios: INE, servicio ArcGIS `DIRCE_restoservicios_2025/FeatureServer/2`, capa de municipios.
 - Cartografía de secciones: INE, API OGC Features `WMS_INE_SECCIONES_G01:Secciones_2023`.
-- Autonómicas de Aragón (pendientes): https://www.aragon.es/portal-de-elecciones/resultados/open-data y https://opendata.aragon.es/datos/catalogo/dataset/resultados-electorales-agrupados-a-escala-municipal-historico.
+- Autonómicas de Aragón (ya incorporadas): https://www.aragon.es/portal-de-elecciones/resultados/open-data , https://opendata.aragon.es/ckan/dataset/resultados-electorales-agrupados-a-escala-municipal-historico y https://opendata.aragon.es/ckan/dataset/elecciones-a-cortes-de-aragon-ano-2026-detalle-distrito-mesa-electoral .
 
 El objeto `provenance` de `site/data/catalog.json` incluye las URL de las descargas originales, hashes SHA-256 y tamaños, además del recuento de registros excluidos por no superar las comprobaciones de integridad. Las fuentes derivadas no sustituyen una auditoría electoral exhaustiva contra actas oficiales originales.
 
-El script `scripts/build_elections.py` descarga y convierte los CSV, simplifica coordenadas cartográficas y escribe los ficheros JSON/GeoJSON; `scripts/validate_atlas.py` rechaza datos incoherentes. El workflow `data-build.yml` permite reproducir la carga y realizar commits separados de código y datos. CI usa `python3 -m unittest discover -s tests -v`, `node --test tests/*.test.mjs` y validación de archivos.
+`scripts/build_elections.py` transforma los datos generales, municipales y europeos; `scripts/build_aragon.py` descarga las autonómicas a través de la API CKAN del Gobierno de Aragón y agrega las mesas de 2026 por sección. `scripts/validate_atlas.py` rechaza valores electorales incoherentes. El workflow `data-build.yml` permite reproducir la carga y realizar commits separados de código y datos. CI usa `python3 -m unittest discover -s tests -v`, `node --test tests/*.test.mjs` y validación de archivos.
 
 ## Formato
 
@@ -57,3 +57,15 @@ Muestra cambios **descriptivos**, no un algoritmo de oportunidad política ni re
 El cambio porcentual se omite cuando no son equivalentes los denominadores de ambas convocatorias; el cambio absoluto de los votos agrupados se mantiene visible. La cartografía por sección es una **aproximación histórica** (polígonos 2023); un código coincidente en dos fechas no demuestra límites idénticos ni identidad del electorado. **No es un mapa de barrios oficiales.** Los polígonos sin datos en ambos extremos se dejan gris claro, en lugar de asignarles un cero ficticio.
 
 Esta pestaña utiliza el mismo control de autenticación y superposición voluntaria de puntos personales que los demás mapas del atlas. Los puntos privados nunca se incorporan a los datasets electorales publicados.
+
+## Autonómicas de Aragón: fuentes y cobertura verificada
+
+- **2003:** 292 municipios.
+- **2007, 2011, 2015, 2019, 2023 y 2026:** 293 municipios cada convocatoria.
+- **2026:** 881 secciones coincidentes con los polígonos INE de 2023; otras secciones quedan sin datos en esa geometría de referencia, sin rellenar ni extrapolar.
+- Conjunto histórico oficial municipal: recursos CKAN `51320233-f534-422e-aec6-e785813f6156` (participación) y `12fd36be-a741-49d8-a09f-64299a418ee0` (candidaturas).
+- Conjunto oficial 2026 municipal: `52eabfe1-57df-4881-8a1c-7a764f61729a` y `7a6c552e-3943-4cf4-b916-52cf8d7b6091`.
+- Conjunto oficial 2026 por mesa: `92e816bf-5041-4749-bd87-745ce8c0ed1a` y `9417e6d5-90a0-47c9-ada2-bfb404feb368`. Agregación al código de sección usando la parte territorial de `cod_mesa`.
+- Licencia de los datos electorales oficiales: **CC BY 4.0**. El catálogo conserva identificadores de recurso y recuentos de exclusiones. Los datos se descargan por páginas de la API, sin usar cifras de proyección ni resultados ficticios.
+
+Las candidaturas de Aragón que no comparten denominación histórica inequívoca se conservan diferenciadas bajo códigos propios (`ARA_...`). La clasificación `PSOE`/`SUMAR` utilizada en algunas vistas históricas generales **no recoge necesariamente CHA, IU y Podemos en todas las autonómicas**: para una comparación completa conviene seleccionar candidaturas individualmente y verificar el criterio. No construir una puntuación que declare a personas abstencionistas como votantes recuperables.

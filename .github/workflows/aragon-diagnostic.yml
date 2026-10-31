@@ -1,0 +1,16 @@
+name: Diagnóstico de autonómicas de Aragón
+on:
+  push:
+    branches: [feature/autonomicas-aragon-historico-2026]
+    paths: [scripts/probe_aragon_ckan.py, .github/workflows/aragon-diagnostic.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consultar recursos públicos y esquema
+        run: python3 -u scripts/probe_aragon_ckan.py

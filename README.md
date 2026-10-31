@@ -25,6 +25,8 @@ The Firebase Spark plan offers free quotas; monitor usage. The site needs HTTPS 
 - Entrada inicial con **Capturar lugares** y **Atlas electoral**.
 - Enlaces internos `#home`, `#carteles` y `#atlas` aptos para GitHub Pages, sin backend adicional.
 - El atlas público tiene vistas de mapa, comparación, evolución, participación y metodología. Comparte Firebase Authentication y puede mostrar **solo con consentimiento (capa desactivada por defecto)** los puntos guardados de la cuenta autorizada.
-- El atlas solo presenta resultados reales incluidos en `site/data/catalog.json`. **Estado actual: 37 capas de generales, municipales y europeas (2000–2024); autonómicas pendientes.** No se utilizan datos simulados ni se extrapolan cifras municipales a secciones censales. Atención: el seccionado cartográfico de 2023 no coincide necesariamente con el histórico.
+- El atlas solo presenta resultados reales incluidos en `site/data/catalog.json`. **Estado actual: 45 capas: generales, municipales y europeas entre 2000 y 2024, más autonómicas de Aragón 2003–2026.** No se utilizan datos simulados ni se extrapolan cifras municipales a secciones censales. Atención: el seccionado cartográfico de 2023 no coincide necesariamente con el histórico.
 - Contrato de datos, fuentes y controles de calidad en [ATLAS-DATOS.md](ATLAS-DATOS.md). Validador: `python3 scripts/validate_atlas.py`.
 - El sitio sigue sin requerir proceso de compilación. El workflow publica `site/` en GitHub Pages.
+
+- Autonómicas de Aragón: importación reproducible desde Aragón Open Data CKAN con `python3 scripts/build_aragon.py`. Siete elecciones autonómicas desde 2003 y detalle de sección en 2026; no hubo convocatoria de estas cuatro clases en Zaragoza durante 2025. La cartografía por sección es de referencia 2023 y no equivale a límites históricos idénticos.

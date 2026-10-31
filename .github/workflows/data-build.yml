@@ -23,6 +23,7 @@ jobs:
       - name: Descargar, procesar y comprobar datos
         run: |
           python3 scripts/build_elections.py
+          python3 scripts/build_aragon.py
           python3 scripts/validate_atlas.py
           python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Publicar conjuntos en la rama de trabajo
