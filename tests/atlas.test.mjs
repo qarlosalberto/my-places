@@ -42,7 +42,7 @@ test('atlas pure data helpers never confuse abstention and turnout',()=>{
   const script=prefix.replace(/const state=\{[\s\S]*?\};/,'const state={catalog:{groups:[],elections:[]},dataCache:new Map()};');
   const context={Intl,document:mock,Number,Math,String,console};
   vm.createContext(context);
-  vm.runInContext(script+';globalThis.exposed={valueFor,votesFor,winner};',context);
+  vm.runInContext('const el=id=>document.getElementById(id);'+script+';globalThis.exposed={valueFor,votesFor,winner};',context);
   const r={electorate:1000,voters:700,valid:680,votes:{PSOE:250,PP:300}};
   assert.equal(context.exposed.valueFor(r,'participation'),70);
   assert.equal(context.exposed.valueFor(r,'abstention'),300);
