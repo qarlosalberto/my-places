@@ -114,3 +114,7 @@
 /* GPS-first place capture: status is the only location control for a new place. */
 #editor #gpsStatus:not(:empty){display:block;background:#eef6ff;border:1px solid #d1e4fc;color:#194c84;border-radius:10px;padding:11px 12px;margin:10px 0 12px;font-size:13px;font-weight:650;line-height:1.5}
 #editor #gpsStatus:empty{display:none}
+
+/* Show a new Map or Group name only when chosen in its dropdown. */
+.newMapGroupFields{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+.newMapGroupFields label:not(.hidden){flex:1 1 200px;margin:6px 0}
