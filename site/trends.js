@@ -1,7 +1,7 @@
 // Lectura descriptiva de resultados electorales agregados: nunca selecciona territorios para campañas.
-const IDS = Object.freeze({izquierda:['PSOE','SUMAR','CHA','ARA_IU','ARA_PODEMOS','ARA_SUMAR'],psoe:['PSOE'],otras_izquierdas:['SUMAR','CHA','ARA_IU','ARA_PODEMOS','ARA_SUMAR']});
+const IDS = Object.freeze({izquierda:['PSOE','SUMAR'],psoe:['PSOE'],otras_izquierdas:['SUMAR']});
 const TYPE_NAMES = {generales:'Generales',municipales:'Municipales',europeas:'Europeas',autonomicas:'Autonómicas'};
-const GROUP_NAMES = {izquierda:'PSOE + CHA + IU/Podemos/Sumar (criterio documentado)',psoe:'PSOE (clasificación de la fuente)',otras_izquierdas:'CHA / IU / Podemos / Sumar (criterio documentado)'};
+const GROUP_NAMES = {izquierda:'PSOE + IU/Podemos/Sumar (clasificación de la fuente)',psoe:'PSOE (clasificación de la fuente)',otras_izquierdas:'IU / Podemos / Sumar (clasificación de la fuente)'};
 const int = v => typeof v==='number' && Number.isFinite(v) && v>=0 ? v : null;
 export const trendGroups = IDS;
 
