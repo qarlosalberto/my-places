@@ -116,13 +116,19 @@ $('group').onchange=()=>{
  toggleNewGroup();
  if(val('group')===NEW_ENTRY)$('newGroup').focus();
 };
-function openEditor(p=null){stopPrecision(false);addressSequence++;lastResolvedAddress='';lastResolvedKey='';autoTitle='';titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
+function openEditor(p=null){
+ const dialog=$('editor');
+ // Show the editor immediately: a GPS or selector error must never block the modal.
+ if(!dialog.open)dialog.showModal();
+ try{
+ stopPrecision(false);addressSequence++;lastResolvedAddress='';lastResolvedKey='';autoTitle='';titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
  for(const id of ['title','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
- const mapChoices=categories();makeSelect('category',mapChoices,'Select a map',p?.map||val('activeMap')||(!mapChoices.length?NEW_ENTRY:''),'+ New map…');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);hide('manualGpsControls',!p);hide('titleEntry',!p);hide('coordinateEntry',!p);hide('locationMapDetails',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('placeForm').querySelector('button[type=submit]').disabled=!p;$('editor').showModal();if(p)initPrecisionMap();else{$('gpsStatus').textContent='Getting GPS position…';$('gps').click()}
+ const mapChoices=categories();makeSelect('category',mapChoices,'Select a map',p?.map||val('activeMap')||(!mapChoices.length?NEW_ENTRY:''),'+ New map…');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);hide('manualGpsControls',!p);hide('titleEntry',!p);hide('coordinateEntry',!p);hide('locationMapDetails',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('placeForm').querySelector('button[type=submit]').disabled=!p;if(p)initPrecisionMap();else{$('gpsStatus').textContent='Getting GPS position…';startPlaceGpsCapture()}
  if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
+ }catch(error){console.error('Could not initialise place editor',error);$('gpsStatus').textContent='Could not load all place options. Close and reopen to retry.';err(error)}
 }
-$('new').onclick=()=>openEditor();$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
+$('new').addEventListener('click',event=>{event.preventDefault();openEditor()});$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
 $('editor').addEventListener('close',()=>stopPrecision(false));
 function updatePrecisionPosition(lat,lng,moveView=true){
  $('lat').value=Number(lat).toFixed(7);$('lng').value=Number(lng).toFixed(7);
@@ -173,7 +179,7 @@ function stopPrecision(show=true){
  if(show&&bestFix){$('gpsStatus').textContent='Best GPS estimate: ±'+Math.round(bestFix.coords.accuracy)+' m. Drag marker to refine.';lookupAddress(bestFix.coords.latitude,bestFix.coords.longitude)};
 }
 $('stopGps').onclick=()=>stopPrecision(true);
-$('gps').onclick=()=>{
+function startPlaceGpsCapture(){
  if(!window.isSecureContext||!navigator.geolocation){$('gpsStatus').textContent='Location unavailable. Enable location services and use HTTPS.';return}
  if(trackingWatch!==null&&useTrackingFix())return;
  stopPrecision(false);bestFix=null;manualAdjusted=false;accuracyMeters=null;precisionStarted=Date.now();
@@ -196,7 +202,8 @@ $('gps').onclick=()=>{
   $('gpsStatus').textContent=e.code===1?'Location permission denied. Enable site location permission.':e.code===3?'GPS timed out. Try again outdoors.':e.message;
   stopPrecision(false);
  },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
-};
+}
+$('gps').onclick=startPlaceGpsCapture;
 
 $('title').addEventListener('input',()=>{titleManuallyEdited=Boolean(val('title'));autoTitle='';addressSequence++});
 $('clearTitle').onclick=()=>{$('title').value='';autoTitle='';titleManuallyEdited=false;addressSequence++;$('addressStatus').textContent='Enter your own title or capture a new position.';$('title').focus()};
