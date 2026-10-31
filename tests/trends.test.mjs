@@ -41,7 +41,7 @@ test('compare absolute votes, shares, abstention, turnout and electorate indepen
  assert.equal(trend.trendValue(c,'shareChange'),c.shareChange);
 });
 test('PSOE and IU/Podemos/Sumar can be examined separately without imputed OTROS',()=>{
- assert.deepEqual(trend.trendGroups.izquierda,['PSOE','SUMAR']);
+ assert.deepEqual(trend.trendGroups.izquierda,['PSOE','SUMAR','CHA','ARA_IU','ARA_PODEMOS','ARA_SUMAR']);
  assert.equal(trend.compareTerritory(start,end,trend.trendGroups.psoe).votesChange,-40);
  assert.equal(trend.compareTerritory(start,end,trend.trendGroups.otras_izquierdas).votesChange,-30);
 });
