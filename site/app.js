@@ -94,7 +94,7 @@ $('newCategory').oninput=()=>chooseGroups();
 function openEditor(p=null){stopPrecision(false);addressSequence++;lastResolvedAddress='';lastResolvedKey='';autoTitle='';titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
  for(const id of ['title','description','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
- makeSelect('category',categories(),'Select a map',p?.map||val('activeMap')||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('editor').showModal();initPrecisionMap();if(!p&&recentTrackingFix())useTrackingFix();
+ makeSelect('category',categories(),'Select a map',p?.map||val('activeMap')||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);hide('manualGpsControls',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('editor').showModal();initPrecisionMap();if(!p){if(trackingWatch!==null&&recentTrackingFix())useTrackingFix();else $('gps').click()}
  if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
 }
 $('new').onclick=()=>openEditor();$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
@@ -179,7 +179,7 @@ async function lookupAddress(lat,lng){
  const key=Number(lat).toFixed(5)+','+Number(lng).toFixed(5);
  const seq=++addressSequence;
  lastResolvedAddress='';lastResolvedKey='';
- const apply=name=>{if(seq!==addressSequence||!$('editor').open)return;lastResolvedAddress=name.slice(0,160);lastResolvedKey=key;if(!titleManuallyEdited){$('title').value=lastResolvedAddress;autoTitle=lastResolvedAddress;$('addressStatus').textContent='Suggested address · © OpenStreetMap contributors. You can edit it.'}};
+ const apply=name=>{if(seq!==addressSequence||!$('editor').open)return;lastResolvedAddress=name.slice(0,160);lastResolvedKey=key;if(!titleManuallyEdited){$('title').value=lastResolvedAddress;autoTitle=lastResolvedAddress;$('addressStatus').textContent='Address from GPS · © OpenStreetMap contributors.'}};
  if(addressCache.has(key)){const name=addressCache.get(key);if(name)apply(name);return}
  $('addressStatus').textContent='Looking up address…';
  try{
@@ -196,8 +196,8 @@ async function lookupAddress(lat,lng){
   const town=a.city||a.town||a.village||a.municipality||a.county||'';
   const name=[street||data.name||'',town].filter(Boolean).join(', ')||data.display_name||'';
   addressCache.set(key,name||null);
-  if(name)apply(name);else if(seq===addressSequence)$('addressStatus').textContent='Address not found. Enter a custom title.';
- }catch(e){if(seq===addressSequence)$('addressStatus').textContent='Address lookup unavailable. Enter a custom title.'}
+  if(name)apply(name);else if(seq===addressSequence)$('addressStatus').textContent='Address unavailable; coordinates will be used as title.';
+ }catch(e){if(seq===addressSequence)$('addressStatus').textContent='Address lookup unavailable; coordinates will be used as title.'}
 }
 // Decode pixels and re-encode in a new canvas. EXIF/GPS/camera metadata from the source is never copied.
 async function compress(f){
