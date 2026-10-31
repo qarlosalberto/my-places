@@ -1,71 +1,44 @@
-# Atlas electoral Zaragoza — contrato de datos
+# Atlas electoral de la provincia de Zaragoza
 
-## Estado real de la primera integración
-La navegación, los mapas Leaflet, el visor de fichas, la comparación, la evolución histórica y la capa privada de lugares están implementados. **El catálogo electoral está vacío** deliberadamente: todavía no se han descargado, reconciliado ni verificado los resultados históricos oficiales. La interfaz no presenta valores de demostración como si fueran reales.
+## Situación actual — 31 de octubre de 2026
 
-## Fuentes primarias previstas
-- Ministerio del Interior, Infoelectoral: https://infoelectoral.interior.gob.es/
-- Ministerio del Interior, catálogo de datos: https://datos.gob.es/es/catalogo/e00003801-resultados-electorales
-- Gobierno de Aragón, resultados autonómicos: https://www.aragon.es/portal-de-elecciones/resultados/open-data
-- Cartografía estadística y seccionado censal del INE: https://www.ine.es/
-- Límites administrativos del Gobierno de Aragón: https://opendata.aragon.es/datos/catalogo/dataset/limites
+La web tiene mapa, comparador, series históricas, participación y capa optativa de lugares privados. El catálogo **sí contiene datos reales**: actualmente **37 capas**, que incluyen elecciones generales, municipales y europeas entre 2000 y 2024; el número representa combinaciones de convocatoria y escala geográfica, **no 37 convocatorias distintas**. Hay 293 polígonos municipales y 1208 polígonos de secciones de referencia, pero la cobertura efectiva varía por convocatoria.
 
-Registrar URL de archivo original, versión, fecha de descarga, método de agregación, licencia y controles de calidad **por elección**.
+**Pendiente:** elecciones autonómicas de Aragón (incluidas las de febrero de 2026), y cobertura histórica más homogénea en municipios y secciones. No se representan como disponibles hasta incorporar y validar los datos. El selector refleja únicamente las convocatorias presentes.
 
-## Estructura de los ficheros
-`site/data/catalog.json` es el índice público de conjuntos reales y verificados. Ejemplo de formato (SOLO documental: no representa cifras reales):
-```json
-{
-  "version": 1,
-  "groups": [
-    {"id": "P1", "label": "Candidatura P1", "color": "#2563eb"}
-  ],
-  "elections": [
-    {
-      "id": "congreso_2023_07",
-      "type": "generales",
-      "date": "2023-07-23",
-      "label": "Generales · 23 julio 2023",
-      "level": "municipio",
-      "geometry": "./data/municipios_2023.geojson",
-      "file": "./data/congreso_2023_07.json",
-      "source": "Ministerio del Interior / archivo y versión exactos",
-      "license": "CC BY 4.0"
-    }
-  ]
-}
-```
-Cada fichero de elección contiene:
-```json
-{
-  "records": [
-    {
-      "id": "50001",
-      "name": "NOMBRE DEL MUNICIPIO",
-      "electorate": 1000,
-      "voters": 700,
-      "valid": 680,
-      "votes": {"P1": 300}
-    }
-  ]
-}
-```
-**Las cifras del ejemplo anterior son ficticias y NO deben publicarse como datos de elecciones.** Para cada geometría GeoJSON, cada `feature.properties.id` debe coincidir exactamente con `record.id` (incluidos ceros iniciales). El código admite `code` o `territory_id` como alternativas. Los datos sin equivalencia geográfica se mantienen como ausentes.
+## Origen, atribución y descarga reproducible
 
-## Tratamiento metodológico
-- Los votos válidos incluyen candidaturas y votos en blanco; los nulos quedan fuera. El total de votos por candidaturas no debería superar los votos válidos.
-- Participación = votantes / censo * 100. Abstención = censo − votantes. No inferir cambios individuales a partir de territorios agregados.
-- **Municipales de listas abiertas**, Senado y otros sistemas no equivalentes necesitan modelos específicos; no mezclar automáticamente con la fórmula de votos por candidatura.
-- Secciones censales: utilizar geometrías de la misma época o una correspondencia verificada; el visor solo compara en el mapa cuando `level` y `geometry` coinciden. Un mismo ID no garantiza límites estables.
-- Agrupaciones ideológicas y coaliciones: elaborar un diccionario por convocatoria, fuente y justificación; las candidaturas mixtas se mantienen explícitamente separadas. No asignar automáticamente un bloque a "Otros" para suplir falta de clasificación.
-- Los resultados del municipio de Zaragoza **no pueden sustituir** resultados de distritos o barrios. Mostrar nivel municipal y aviso cuando no haya precisión mayor.
-- Ficheros públicos: exclusivamente agregados electorales y cartografía; los puntos, fotos y comentarios de usuarios siguen en Firestore.
+Los resultados electorales de este primer lote proceden de los CSV abiertos publicados por **Mapa Electoral (Nacho G. del Álamo)**, que procesan datos del **Ministerio del Interior y del INE**, bajo **CC BY 4.0**.
+
+- Página de descarga: https://mapaelectoral.es/generales-2026/descargas/
+- Metodología de la fuente: https://mapaelectoral.es/generales-2026/metodologia.html
+- Fuente primaria del Ministerio del Interior: https://infoelectoral.interior.gob.es/
+- Cartografía de municipios: INE, servicio ArcGIS `DIRCE_restoservicios_2025/FeatureServer/2`, capa de municipios.
+- Cartografía de secciones: INE, API OGC Features `WMS_INE_SECCIONES_G01:Secciones_2023`.
+- Autonómicas de Aragón (pendientes): https://www.aragon.es/portal-de-elecciones/resultados/open-data y https://opendata.aragon.es/datos/catalogo/dataset/resultados-electorales-agrupados-a-escala-municipal-historico.
+
+El objeto `provenance` de `site/data/catalog.json` incluye las URL de las descargas originales, hashes SHA-256 y tamaños, además del recuento de registros excluidos por no superar las comprobaciones de integridad. Las fuentes derivadas no sustituyen una auditoría electoral exhaustiva contra actas oficiales originales.
+
+El script `scripts/build_elections.py` descarga y convierte los CSV, simplifica coordenadas cartográficas y escribe los ficheros JSON/GeoJSON; `scripts/validate_atlas.py` rechaza datos incoherentes. El workflow `data-build.yml` permite reproducir la carga y realizar commits separados de código y datos. CI usa `python3 -m unittest discover -s tests -v`, `node --test tests/*.test.mjs` y validación de archivos.
+
+## Formato
+
+`site/data/catalog.json` contiene grupos de candidaturas y convocatorias, cada una con `id`, `date`, `type`, `label`, `level`, `geometry`, `file`, `source`, `license` y denominador. Los ficheros de elección contienen `records` con `id`, `name`, `electorate`, `voters`, `valid` y `votes` por grupo. Los `feature.properties.id` del GeoJSON son cadenas que coinciden con `record.id`, sin quitar ceros iniciales.
+
+**No se guardan datos de usuarios entre los JSON públicos.** Los puntos personales continúan en Firestore y están sujetos a la invitación y reglas de usuario existentes; la capa se activa manualmente y se borra al cerrar sesión.
+
+## Precauciones que deben leerse antes de comparar resultados
+
+1. **Cartografía temporal:** los polígonos municipales son una referencia de 2025; los de sección censal son los de **2023**. La aplicación compara códigos entre convocatorias; un código de sección coincidente **no garantiza límites físicos equivalentes**. Las secciones antiguas pueden no aparecer en la geometría actual y se muestran sin datos. Nunca atribuir una variación histórica a una misma población sin comprobar el seccionado.
+2. **Cobertura incompleta:** faltan algunos municipios y bastantes secciones según la convocatoria. No convertir ausencia de datos en voto cero. Los 1208 polígonos incluyen secciones sin correspondencia para muchas elecciones.
+3. **Censo y participación:** participación = votantes/censo × 100; abstención = censo − votantes. La abstención porcentual es 100 − participación (para el mismo censo).
+4. **Votos válidos y listas abiertas:** cuando se conocen votos blancos y votos a candidaturas, válidos = suma de ambos. Algunas filas históricas municipales sin blancos emplean únicamente votos a candidaturas; quedan marcadas con `denominator: "candidaturas"`. Las municipales en régimen de listas abiertas no se pueden interpretar como si sus votos a candidatos fueran votos a listas cerradas.
+5. **Agrupación de partidos:** los grupos del CSV son **categorías históricas normalizadas de la fuente**, no denominaciones oficiales idénticas entre años. Por ejemplo `SUMAR` engloba IU/Podemos/Sumar y confluencias en distintos periodos. `OTROS` no equivale a un bloque ideológico. El atlas **no** imputa automáticamente izquierda/derecha ni deduce trasvases individuales.
+6. **Comparación territorial:** se requiere mismo nivel y referencia geométrica en el visor; aun cumpliéndolo, cambios en secciones y composición del censo pueden hacer que la comparabilidad sea imperfecta. Los resultados de municipio no deben asignarse artificialmente a cada barrio.
+7. **Sesgo y procedencia:** derivados de una fuente secundaria con su propia normalización histórica; consultar la metodología original y cotejar con resultados oficiales al interpretar casos locales o convocatorias con incidencias.
 
 ## Publicación
-1. Descargar originales de fuentes oficiales y conservar un registro de procedencia, licencia y comprobaciones.
-2. Normalizar la codificación de candidaturas, municipios y secciones; cuadrar totales por municipio y elección.
-3. Simplificar los límites para servir GeoJSON desde GitHub Pages sin cargar imágenes ni datos pesados innecesariamente.
-4. Crear los ficheros en `site/data/` e incorporar las elecciones al catálogo.
-5. Ejecutar `python3 scripts/validate_atlas.py`. Nunca añadir archivos de ejemplo ficticios al catálogo.
 
-La aplicación anterior continúa funcionando sin necesidad de datos electorales. La parte de carteles usa las mismas colecciones `users/{uid}/places` de Firestore y la misma validación de invitaciones.
+GitHub Pages publica `site/` desde `main`, tras CI y comprobaciones del workflow de despliegue. Para una actualización: modificar el ETL, ejecutar el workflow de construcción, examinar hashes, cobertura, cruces y exclusiones, validar y fusionar los commits revisados.
+
+La parte de capturar lugares conserva sus mapas, fotografías, importación/exportación y login originales.
