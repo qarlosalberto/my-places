@@ -341,7 +341,7 @@ function reportWrap(value,max=89){
  }
  return out.length?out:[''];
 }
-function makePdfDocument(pages,canvas){
+function makePdfDocument(pages,canvas,photos=[]){
  const width=canvas.width,height=canvas.height;
  const binary=atob(canvas.toDataURL('image/jpeg',0.84).split(',')[1]);
  const jpeg=Uint8Array.from(binary,ch=>ch.charCodeAt(0));
@@ -349,11 +349,13 @@ function makePdfDocument(pages,canvas){
  const pagesId=add(''),regular=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'),
  bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
  const imageId=add([reportBytes('<< /Type /XObject /Subtype /Image /Width '+width+' /Height '+height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jpeg.length+' >>\nstream\n'),jpeg,reportBytes('\nendstream')]);
+ const photoIds=photos.map(photo=>add([reportBytes('<< /Type /XObject /Subtype /Image /Width '+photo.width+' /Height '+photo.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+photo.bytes.length+' >>\nstream\n'),photo.bytes,reportBytes('\nendstream')]));
+ const imageRefs='/Im0 '+imageId+' 0 R'+photos.map((photo,index)=>' /'+photo.alias+' '+photoIds[index]+' 0 R').join('');
  const pageIds=[];
  pages.forEach(commands=>{
   const content=reportBytes(commands.join('\n')+'\n');
   const streamId=add([reportBytes('<< /Length '+content.length+' >>\nstream\n'),content,reportBytes('endstream')]);
-  pageIds.push(add('<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 '+regular+' 0 R /F2 '+bold+' 0 R >> /XObject << /Im0 '+imageId+' 0 R >> >> /Contents '+streamId+' 0 R >>'));
+  pageIds.push(add('<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 '+regular+' 0 R /F2 '+bold+' 0 R >> /XObject << '+imageRefs+' >> >> /Contents '+streamId+' 0 R >>'));
  });
  objects[pagesId]='<< /Type /Pages /Kids ['+pageIds.map(id=>id+' 0 R').join(' ')+'] /Count '+pageIds.length+' >>';
  const catalog=add('<< /Type /Catalog /Pages '+pagesId+' 0 R >>');
@@ -434,6 +436,22 @@ async function makeReportMap(places){
  ctx.font='13px sans-serif';ctx.fillStyle='#4a6079';
  ctx.fillText('Map data © OpenStreetMap contributors',12,H-7);
  return {canvas:d.canvas,tilesLoaded:loaded};
+}
+async function reportPlacePhoto(p,index){
+ if(!p.photoExists)return null;
+ try{
+  const source=await getPhoto(p);
+  if(typeof source!=='string'||!source.startsWith('data:image/jpeg;base64,'))return null;
+  const image=new Image();
+  await new Promise((resolve,reject)=>{
+   image.onload=resolve;
+   image.onerror=()=>reject(new Error('Could not decode saved photograph'));
+   image.src=source;
+  });
+  if(!image.naturalWidth||!image.naturalHeight)return null;
+  const binary=atob(source.slice('data:image/jpeg;base64,'.length));
+  return {alias:'Im'+(index+1),width:image.naturalWidth,height:image.naturalHeight,bytes:Uint8Array.from(binary,ch=>ch.charCodeAt(0))};
+ }catch(error){console.warn('Skipping unavailable PDF photo for place',p.id,error);return null}
 }
 async function exportFilteredPdf(){
  const button=$('exportPdf'),items=relevant();
