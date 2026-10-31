@@ -12,7 +12,7 @@ function setStatus(value){el('atlasStatus').textContent=value}
 function options(id,items,selected=''){const sel=el(id);sel.replaceChildren();items.forEach(([value,label])=>sel.add(new Option(label,value)));if(items.some(item=>item[0]===selected))sel.value=selected}
 function appendSwatch(label,color){const x=document.createElement('span'),s=document.createElement('span');s.className='swatch';s.style.background=color;x.append(s,document.createTextNode(label));el('atlasLegend').append(x)}
 function groupInfo(code){return state.catalog.groups.find(g=>g.id===code)||{id:code,label:code,color:'#557cae'}}
-function election(){return state.catalog.elections.find(e=>e.id===el('atlasElection').value)}
+function election(){const active=state.tab==='compare'&&el('atlasCompareMode').value==='slider'&&el('atlasSlider').value==='1'?el('atlasCompareElection').value:el('atlasElection').value;return state.catalog.elections.find(e=>e.id===active)}
 function otherElection(){return state.catalog.elections.find(e=>e.id===el('atlasCompareElection').value)}
 function isCompared(){return state.tab==='compare'&&el('atlasCompareMode').value!=='slider'}
 function metric(){return state.tab==='turnout'?'participation':el('atlasMetric').value}
@@ -166,14 +166,16 @@ async function renderHistory(){
  const table=document.createElement('table');const head=document.createElement('tr');
  for(const name of ['Elección','Censo','Votantes','Participación','Grupo más votado']){const th=document.createElement('th');th.textContent=name;head.append(th)}table.append(head);
  for(const {e:x,r} of ready){const tr=document.createElement('tr');for(const t of [x.label,fmt.format(r.electorate??0),fmt.format(r.voters??0),percent(valueFor(r,'participation')),groupInfo(winner(r)).label]){const td=document.createElement('td');td.textContent=t;tr.append(td)}table.append(tr)}
- root.append(table);
+ root.append(table);const plot=document.createElement('div');plot.className='atlasTrend';
+ for(const {e:x,r} of ready){const item=document.createElement('div');item.className='atlasTrendItem';const val=valueFor(r,'participation');const bar=document.createElement('div');bar.className='atlasTrendBar';bar.style.height=(val===null?0:Math.max(0,Math.min(100,val)))+'%';bar.title=x.label+': '+percent(val);const l=document.createElement('small');l.textContent=x.date.slice(0,4);item.append(bar,l);plot.append(item)}root.append(plot);note(root,'Barras: participación por convocatoria.');
 }
 function controls(){
  const tab=state.tab,method=tab==='method',compare=tab==='compare';
- show('atlasControls',!method);show('atlasPrivate',!method);show('atlasDisplay',!method);show('atlasHistory',!method);show('atlasMethod',method);
+ show('atlasControls',!method);show('atlasPrivate',!method);show('atlasDisplay',!method);show('atlasHistory',!method);show('atlasMethod',method);show('atlasExtra',!method);show('atlasSliderBox',compare&&el('atlasCompareMode').value==='slider');
  show('atlasCompareRow',compare);show('atlasCompareModeRow',compare);show('atlasGroupRow',metric()==='votes'||metric()==='share'||(compare&&el('atlasCompareMode').value==='difference'));
  el('atlasTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.atlasTab===tab));
  if(tab==='turnout')el('atlasMetric').value='participation';
+ el('atlasSliderLabel').textContent=el('atlasSlider').value==='1'?'Segunda elección':'Primera elección';
 }
 function refreshControls(){
  const events=state.catalog.elections;
@@ -185,10 +187,37 @@ function refreshControls(){
  const groups=state.catalog.groups||[];options('atlasGroup',groups.length?groups.map(g=>[g.id,g.label]):[['','Sin clasificación disponible']],el('atlasGroup').value||groups[0]?.id);
  controls();renderMap();
 }
+
+function searchPlace(){
+ const term=el('atlasSearch').value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ if(!term){setStatus('Introduce un municipio o sección para buscar.');return}
+ const e=election();
+ const rows=dataFor(e)?.records||[];
+ const r=rows.find(r=>areaName(r).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(term));
+ if(!r){setStatus('No hay coincidencias en la elección cargada.');return}
+ state.selected=recordId(r);renderInfo();renderHistory();
+ let bounds=null;
+ state.layer?.eachLayer(layer=>{if(areaId(layer.feature)===state.selected)bounds=layer.getBounds()});
+ if(bounds?.isValid())state.map.fitBounds(bounds,{maxZoom:12,padding:[35,35]});
+}
+function downloadElection(){
+ const e=election(),rows=dataFor(e)?.records;
+ if(!e||!rows?.length){setStatus('No hay resultados cargados para exportar.');return}
+ const groups=state.catalog.groups.map(g=>g.id);
+ const cells=[['eleccion','municipio_o_seccion','codigo','censo','votantes','validos',...groups],
+ ...rows.map(r=>[e.id,areaName(r),recordId(r),r.electorate,r.voters,r.valid,...groups.map(g=>r.votes[g]??0)])];
+ const csv=cells.map(line=>line.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+ const anchor=document.createElement('a');anchor.href=url;anchor.download='zaragoza-'+e.id+'.csv';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+
 export async function initAtlas(){
  el('atlasTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.atlasTab;controls();renderMap()});
  for(const name of ['atlasElection','atlasCompareElection','atlasMetric','atlasGroup','atlasCompareMode'])el(name).addEventListener('change',()=>{controls();renderMap()});
  el('atlasPins').addEventListener('change',refreshPins);el('atlasPlacesMap').addEventListener('change',refreshPins);
+ el('atlasSlider').addEventListener('input',()=>{controls();renderMap()});
+ el('atlasSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchPlace()}});
+ el('atlasExport').addEventListener('click',downloadElection);
  try{
   const r=await fetch('./data/catalog.json',{cache:'no-cache'});if(!r.ok)throw new Error('Falta catálogo');const catalog=await r.json();
   if(!Array.isArray(catalog.elections)||!Array.isArray(catalog.groups))throw new Error('Catálogo incorrecto');
