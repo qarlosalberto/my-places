@@ -69,7 +69,7 @@ def download_csv(name, temp):
    if not chunk:break
    digest.update(chunk);dest.write(chunk)
  print(name,out.stat().st_size,"bytes",flush=True)
- return out,{"url":url,"sha256":digest.hexdigest(),"bytes":out.stat().st_size()}
+ return out,{"url":url,"sha256":digest.hexdigest(),"bytes":out.stat().st_size}
 def records(path):
  with path.open(newline="",encoding="utf-8-sig") as fh:
   yield from csv.DictReader(fh)
