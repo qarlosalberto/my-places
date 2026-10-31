@@ -128,7 +128,7 @@ async function renderMap(){
  }catch(error){if(seq!==state.renderSeq)return;setStatus('Datos pendientes o no accesibles: '+error.message);clearLayers();renderInfo();renderHistory()}
 }
 function clearLayers(){if(state.layer){state.map.removeLayer(state.layer);state.layer=null}if(state.layer2&&state.map2){state.map2.removeLayer(state.layer2);state.layer2=null}empty(el('atlasLegend'))}
-function syncView(from,to){if(!to||state.syncing||!el('atlasCompareMap').classList.contains('hidden')===false)return;state.syncing=true;to.setView(from.getCenter(),from.getZoom(),{animate:false});state.syncing=false}
+function syncView(from,to){if(!to||state.syncing||el('atlasCompareMap').classList.contains('hidden'))return;state.syncing=true;to.setView(from.getCenter(),from.getZoom(),{animate:false});state.syncing=false}
 function kv(parent,label,value){const d=document.createElement('div'),s=document.createElement('small'),v=document.createElement('strong');s.textContent=label;v.textContent=value;d.append(s,v);parent.append(d)}
 function renderInfo(){
  const root=el('atlasInfo');empty(root);const title=document.createElement('h2');title.textContent='Territorio seleccionado';root.append(title);
@@ -201,7 +201,7 @@ export function showAtlas(){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(state.map);
   state.pinLayer=L.layerGroup().addTo(state.map);
  }
- setTimeout(()=>{state.map.invalidateSize();state.map2?.invalidateSize();refreshPins()},90);
+ setTimeout(()=>{state.map.invalidateSize();state.map2?.invalidateSize();refreshPins();renderMap()},90);
 }
 export function updateAtlasPlaces(places,authorized){
  state.authorized=Boolean(authorized);state.places=authorized?places.slice():[];
