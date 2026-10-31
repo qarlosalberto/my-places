@@ -140,3 +140,22 @@
 .atlasTrendItem{flex:1;min-width:20px;max-width:100px;height:100%;display:flex;align-items:center;justify-content:end;flex-direction:column;gap:6px}
 .atlasTrendBar{width:75%;background:#3182ba;max-width:42px;border-radius:6px 6px 0 0}
 .atlasTrendItem small{font-size:10px;color:#526681}
+
+
+/* Trends: explanatory comparisons, not targeting or opportunity scores */
+.trendIntro h2{margin:0 0 6px}.trendIntro p{line-height:1.55;margin:0 0 15px}
+.trendControls{display:grid;grid-template-columns:repeat(3,minmax(160px,1fr));gap:11px;margin:16px 0}
+.trendControls label{display:block;font-size:12px;font-weight:750;color:#516881}
+.trendControls select{display:block;width:100%;margin-top:5px;height:42px}
+.trendCaution{background:#fff6e5;border:1px solid #edd6a9;border-radius:11px;padding:12px 15px;color:#765b36;font-size:12px;line-height:1.6;margin:13px 0}
+.trendLayout{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,350px);gap:15px}
+.trendMapColumn{min-width:0}
+#atlasTrendMap{height:510px;min-height:350px;border-radius:15px;border:1px solid #dce5f4;z-index:0}
+#atlasTrendLegend{display:flex;gap:14px;flex-wrap:wrap;padding:9px 4px}
+.trendHistory{margin-top:16px;overflow-x:auto}
+.trendTable{width:100%;border-collapse:collapse;font-size:12px}
+.trendTable th,.trendTable td{padding:9px;text-align:left;border-bottom:1px solid #e6edf7;white-space:nowrap}
+.trendChart{width:100%;height:auto;margin-top:16px;background:#f7fafe;border-radius:12px}
+.trendChartLegend{font-size:12px;margin:9px 0;color:#526782}
+@media(max-width:920px){.trendLayout{grid-template-columns:1fr}.trendControls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:570px){.trendControls{gap:8px}.trendControls label{font-size:11px}#atlasTrendMap{height:53vh;min-height:340px}}

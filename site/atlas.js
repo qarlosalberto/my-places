@@ -1,9 +1,11 @@
+import {createTrendTab} from './trends.js';
 // Atlas electoral público: los datos personales entran exclusivamente desde la sesión ya autorizada.
 // Sin datos publicados, no se muestran resultados simulados.
 const el=id=>document.getElementById(id);
 const show=(id,visible)=>el(id).classList.toggle('hidden',!visible);
 const fmt=new Intl.NumberFormat('es-ES');
 const percent=n=>Number.isFinite(n)?n.toLocaleString('es-ES',{maximumFractionDigits:1})+' %':'Sin dato';
+let trendTab=null;
 const state={map:null,map2:null,layer:null,layer2:null,pinLayer:null,pinLayer2:null,catalog:{groups:[],elections:[]},dataCache:new Map(),geoCache:new Map(),places:[],authorized:false,tab:'map',selected:null,renderSeq:0,initialBounds:false,syncing:false};
 const button=(label,handler)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=handler;return b};
 const note=(parent,text)=>{const p=document.createElement('p');p.textContent=text;parent.append(p);return p};
@@ -85,6 +87,7 @@ function drawMap(target,e,geo,compareE=null){
 }
 function makePinPopup(p){const box=document.createElement('div');box.className='atlasPinPopup';const title=document.createElement('strong');title.textContent=p.title||'Lugar guardado';box.append(title);note(box,[p.map||p.category||'Sin mapa',p.group||'Sin grupo'].join(' · '));return box}
 function refreshPins(){
+ trendTab?.refreshPins();
  for(const layer of [state.pinLayer,state.pinLayer2])layer?.clearLayers();
  const enabled=state.authorized&&el('atlasPins').checked;if(!enabled)return;
  const wanted=el('atlasPlacesMap').value;
@@ -103,6 +106,7 @@ function renderLegend(diff){
 }
 function selectionLabel(e){return e?.label||'Elección sin definir'}
 async function renderMap(){
+ if(state.tab==='trends'){trendTab?.render();return}
  if(!state.map)return;
  const seq=++state.renderSeq;
  const e=election(),e2=otherElection(),side=isCompared()&&el('atlasCompareMode').value==='side';
@@ -175,8 +179,8 @@ async function renderHistory(){
  for(const {e:x,r} of ready){const item=document.createElement('div');item.className='atlasTrendItem';const val=valueFor(r,'participation');const bar=document.createElement('div');bar.className='atlasTrendBar';bar.style.height=(val===null?0:Math.max(0,Math.min(100,val)))+'%';bar.title=x.label+': '+percent(val);const l=document.createElement('small');l.textContent=x.date.slice(0,4);item.append(bar,l);plot.append(item)}root.append(plot);note(root,'Barras: participación por convocatoria.');
 }
 function controls(){
- const tab=state.tab,method=tab==='method',compare=tab==='compare';
- show('atlasControls',!method);show('atlasPrivate',!method);show('atlasDisplay',!method);show('atlasHistory',!method);show('atlasMethod',method);show('atlasExtra',!method);show('atlasSliderBox',compare&&el('atlasCompareMode').value==='slider');
+ const tab=state.tab,method=tab==='method',compare=tab==='compare',trends=tab==='trends';
+ show('atlasControls',!method&&!trends);show('atlasPrivate',!method);show('atlasDisplay',!method&&!trends);show('atlasHistory',!method&&!trends);show('atlasMethod',method);show('atlasExtra',!method&&!trends);show('atlasTrendsScreen',trends);show('atlasSliderBox',compare&&el('atlasCompareMode').value==='slider');
  show('atlasCompareRow',compare);show('atlasCompareModeRow',compare);show('atlasGroupRow',metric()==='votes'||metric()==='share'||(compare&&el('atlasCompareMode').value==='difference'));
  el('atlasTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.atlasTab===tab));
  if(tab==='turnout')el('atlasMetric').value='participation';
@@ -217,6 +221,10 @@ function downloadElection(){
 }
 
 export async function initAtlas(){
+ trendTab=createTrendTab({
+  catalog:()=>state.catalog,loadElection,loadGeometry,setStatus,
+  privateState:()=>({authorized:state.authorized,enabled:el('atlasPins').checked,places:state.places,mapName:el('atlasPlacesMap').value})
+ });
  el('atlasTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.atlasTab;controls();renderMap()});
  for(const name of ['atlasElection','atlasCompareElection','atlasMetric','atlasGroup','atlasCompareMode'])el(name).addEventListener('change',()=>{controls();renderMap()});
  el('atlasPins').addEventListener('change',refreshPins);el('atlasPlacesMap').addEventListener('change',refreshPins);
@@ -226,7 +234,7 @@ export async function initAtlas(){
  try{
   const r=await fetch('./data/catalog.json',{cache:'no-cache'});if(!r.ok)throw new Error('Falta catálogo');const catalog=await r.json();
   if(!Array.isArray(catalog.elections)||!Array.isArray(catalog.groups))throw new Error('Catálogo incorrecto');
-  state.catalog=catalog;refreshControls();
+  state.catalog=catalog;trendTab.init();refreshControls();
  }catch(error){setStatus('No se pudo cargar el catálogo electoral: '+error.message)}
 }
 export function showAtlas(){

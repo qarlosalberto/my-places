@@ -20,6 +20,7 @@ jobs:
         run: |
           node --input-type=module --check < site/app.js
           node --input-type=module --check < site/atlas.js
+          node --input-type=module --check < site/trends.js
       - name: Validate static data
         run: python3 scripts/validate_atlas.py
       - name: Unit and integration checks
