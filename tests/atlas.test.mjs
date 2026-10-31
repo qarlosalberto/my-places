@@ -8,7 +8,7 @@ const atlas=fs.readFileSync('site/atlas.js','utf8');
 const style=fs.readFileSync('site/style.css','utf8');
 
 test('single page exposes both entrances and existing editor',()=>{
-  for(const id of ['home','dashboard','atlas','cartelesGate','login','logout','editor','atlasMap','atlasPins'])
+  for(const id of ['home','dashboard','atlas','cartelesGate','login','logout','editor','atlasMap','atlasPins','atlasExtra','atlasSliderBox'])
     assert.match(html,new RegExp('id="'+id+'"'));
   const ids=[...html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]);
   assert.equal(new Set(ids).size,ids.length,'duplicate HTML IDs');
