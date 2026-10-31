@@ -118,3 +118,7 @@
 /* Show a new Map or Group name only when chosen in its dropdown. */
 .newMapGroupFields{display:flex;flex-wrap:wrap;gap:8px;margin:0}
 .newMapGroupFields label:not(.hidden){flex:1 1 200px;margin:6px 0}
+
+/* Keep the new-place action touchable above the map on phones. */
+.compactToolbar{position:relative;z-index:5}
+.compactToolbar #new{position:relative;z-index:6;touch-action:manipulation;pointer-events:auto}
