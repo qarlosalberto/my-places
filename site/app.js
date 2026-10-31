@@ -1,3 +1,4 @@
+import {initAtlas,showAtlas,updateAtlasPlaces} from './atlas.js';
 import {firebaseConfig} from './firebase-config-v2.js';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
@@ -9,20 +10,30 @@ let precisionWatch=null,precisionTimeout=null,precisionStarted=0,bestFix=null,ma
 let trackingWatch=null,latestTrackingFix=null;let titleManuallyEdited=false,addressSequence=0,lastAddressCall=0,lastResolvedAddress='',lastResolvedKey='',autoTitle='';const addressCache=new Map();
 const toast=s=>{let t=$('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',4500)};
 const err=e=>{console.error(e);toast(e.message||String(e))};
+initAtlas();
+function showRoute(){
+ const route=location.hash.replace(/^#/,'');const page=['atlas','carteles'].includes(route)?route:'home';
+ hide('home',page!=='home');hide('atlas',page!=='atlas');hide('dashboard',page!=='carteles'||!user);
+ hide('cartelesGate',page!=='carteles'||!!user);
+ if(page==='atlas')showAtlas();
+ if(page==='carteles'&&user){initMap();render();setTimeout(()=>map?.invalidateSize(),80)}
+}
+window.addEventListener('hashchange',showRoute);
+showRoute();
 const configured=Boolean(firebaseConfig.apiKey&&!firebaseConfig.apiKey.includes('PON_AQUI')&&firebaseConfig.projectId&&!firebaseConfig.projectId.includes('PON_AQUI'));
 if(!configured){hide('setup',false);$('login').disabled=true}else{
  const fb=initializeApp(firebaseConfig);auth=getAuth(fb);db=getFirestore(fb);
  $('login').onclick=()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(err);
  $('logout').onclick=()=>signOut(auth).catch(err);
  onAuthStateChanged(auth,async u=>{
-  unsubscribe();unsubscribe=()=>{};if(!u)stopTracking();user=null;places=[];photoUrls.clear();
-  hide('login',!!u);hide('logout',!u);$('identity').textContent=u?.email||'';hide('dashboard',true);hide('denied',true);
+  unsubscribe();unsubscribe=()=>{};if(!u)stopTracking();user=null;places=[];photoUrls.clear();updateAtlasPlaces([],false);
+  hide('login',!!u);hide('logout',!u);$('identity').textContent=u?.email||'';hide('dashboard',true);hide('denied',true);showRoute();
   if(!u)return;
   try{
    const invite=await getDoc(doc(db,'invites',u.email.toLowerCase()));
    if(!invite.exists()||invite.data().active!==true){hide('denied',false);return}
-   user=u;hide('dashboard',false);initMap();
-   unsubscribe=onSnapshot(collection(db,'users',u.uid,'places'),s=>{places=s.docs.map(d=>({id:d.id,...d.data(),map:d.data().map||d.data().category||'Default'}));render();migrateLegacyMaps(s.docs).catch(err)},err);
+   user=u;showRoute();
+   unsubscribe=onSnapshot(collection(db,'users',u.uid,'places'),s=>{places=s.docs.map(d=>({id:d.id,...d.data(),map:d.data().map||d.data().category||'Default'}));render();updateAtlasPlaces(places,true);migrateLegacyMaps(s.docs).catch(err)},err);
   }catch(e){hide('denied',false);err(e)}
  });
 }

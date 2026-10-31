@@ -18,6 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate static JavaScript and electoral data
+        run: |
+          node --input-type=module --check < site/app.js
+          node --input-type=module --check < site/atlas.js
+          python3 scripts/validate_atlas.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
