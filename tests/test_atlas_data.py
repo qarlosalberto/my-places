@@ -11,10 +11,13 @@ validator = module_from_spec(spec)
 spec.loader.exec_module(validator)
 
 class AtlasDataTests(unittest.TestCase):
-    def test_empty_catalog_is_explicit(self):
+    def test_catalog_uses_real_elections_or_empty_state(self):
         data = json.loads((ROOT / "site/data/catalog.json").read_text(encoding="utf-8"))
-        self.assertEqual(data["elections"], [])
-        self.assertEqual(data["groups"], [])
+        self.assertIsInstance(data["elections"], list)
+        self.assertIsInstance(data["groups"], list)
+        for election in data["elections"]:
+            self.assertTrue(election.get("source"))
+            self.assertTrue(election.get("license"))
 
     def test_reject_traversal(self):
         with self.assertRaises(ValueError):
