@@ -187,7 +187,7 @@ def read_wide_fallback(path,names):
   mun=(r.get("mun_code") or "").strip()
   if mun not in names:continue
   for event in DATES:
-   if not (event in ("2000_03","M2003","M2007")):continue
+   if not (event in ("2000_03","M2003","M2007","M2011","M2015","M2019","M2023")):continue
    census=number(r.get(event+"_censo"));voters=number(r.get(event+"_votantes"))
    if census is None or voters is None or voters>census:continue
    votes={g:number(r.get(event+"_v"+g)) for g in GROUPS}
@@ -214,9 +214,15 @@ def write_elections(sections,municipal,counts,geom_mun,geom_sec,names,wide):
      "electorate":m["censo"],"voters":m["votantes"],
      "valid":m["candidaturas"]+m["blancos"],
      "votes":{g:v for g,v in m["votes"].items() if v>0}})
-   denom="votos válidos"
+   existing={r["id"] for r in result}
+   extra=[r for code,r in sorted(wide.get(event,{}).items()) if code in codes and code not in existing]
+   for r in extra:r["denominator"]="candidaturas"
+   result.extend(extra)
+   result.sort(key=lambda r:r["id"])
+   denom="votos válidos (secciones), votos a candidaturas (municipios de listas abiertas)" if extra else "votos válidos"
   else:
    result=[r for code,r in sorted(wide.get(event,{}).items()) if code in codes]
+   for r in result:r["denominator"]="candidaturas"
    denom="votos a candidaturas (sin blancos en fuente histórica)"
   if len(result)>=200:
    filename=f"{event}_municipios.json"
