@@ -36,7 +36,7 @@ export function trendEvents(catalog,type,level){
 export function recentDecade(events){
   if(!events?.length)return [];
   const newest=events[events.length-1];
-  const year=new Number(newest.date.slice(0,4)).valueOf()-10;
+  const year=Number(newest.date.slice(0,4))-10;
   const cutoff=newest.date.replace(/^\d{4}/,String(year).padStart(4,'0'));
   return events.filter(e=>e.date>=cutoff&&e.geometry===newest.geometry);
 }
@@ -122,7 +122,7 @@ export function createTrendTab({catalog,loadElection,loadGeometry,privateState,s
    box.append(title,node('p',null,[p.map||p.category||'Sin mapa',p.group||'Sin grupo'].join(' · ')));
    L.circleMarker([lat,lon],{radius:6,color:'#137a56',weight:2,fillColor:'#26aa79',fillOpacity:.9}).bindPopup(box).addTo(pinLayer);
   }
-  pinLayer.bringToFront();
+  pinLayer.eachLayer(layer=>layer.bringToFront?.());
  }
  function selectArea(id){
   selectedId=id;
