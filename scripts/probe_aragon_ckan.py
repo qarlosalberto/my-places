@@ -20,11 +20,15 @@ for package in ["elecciones-a-cortes-de-aragon-ano-2026-detalle-distrito-mesa-el
   for item in data.get("resources",[]):
    if item.get("format","").upper() in ("CSV","JSON"):
     print("RESOURCE",item.get("id"),item.get("name","")[:80],item.get("format"),(item.get("url") or "")[:190],flush=True)
-for uid in ["52eabfe1-57df-4881-8a1c-7a764f61729a","8ff0dfea-bafd-4af3-96be-8a7da6808268"]:
- for f in [None,{"cod_municipio":"50001"}]:
-  params={"resource_id":uid,"limit":2}
-  if f:params["filters"]=json.dumps(f)
-  data,url=get("datastore_search",params)
-  print("DATASTORE",uid,"filter",f,"found",bool(data),"count",data.get("total") if data else None,"keys",list(data) if data else None,flush=True)
-  if data:
-   print("FIELDS",[x.get("id") for x in data.get("fields",[])],"ROWS",str(data.get("records",[]))[:1500],flush=True)
+for uid in [
+ "52eabfe1-57df-4881-8a1c-7a764f61729a",
+ "7a6c552e-3943-4cf4-b916-52cf8d7b6091",
+ "51320233-f534-422e-aec6-e785813f6156",
+ "12fd36be-a741-49d8-a09f-64299a418ee0",
+ "92e816bf-5041-4749-bd87-745ce8c0ed1a",
+ "9417e6d5-90a0-47c9-ada2-bfb404feb368"
+]:
+ params={"resource_id":uid,"limit":2}
+ data,url=get("datastore_search",params)
+ print("DATASTORE",uid,"found",bool(data),"count",data.get("total") if data else None,flush=True)
+ if data:print("FIELDS",[x.get("id") for x in data.get("fields",[])],"ROWS",str(data.get("records",[]))[:2000],flush=True)
