@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -23,11 +26,3 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_*.py' -v
           node --test tests/*.test.mjs
-  inspect-official-data:
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Inspect reusable CSV schemas and GIS (non-blocking)
-        run: python3 scripts/probe_prepared.py
