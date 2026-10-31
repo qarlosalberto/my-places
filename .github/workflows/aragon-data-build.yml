@@ -26,5 +26,6 @@ jobs:
           git add site/data
           if ! git diff --cached --quiet; then
             git commit -m 'data: incorporar autonómicas Aragón 2003–2026 oficiales'
+            git pull --rebase origin feature/autonomicas-aragon-historico-2026
             git push origin HEAD:feature/autonomicas-aragon-historico-2026
           fi
