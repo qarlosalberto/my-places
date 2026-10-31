@@ -29,5 +29,5 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect Aragón public datasets (non-blocking source diagnostics)
-        run: python3 scripts/probe_sources.py
+      - name: Inspect reusable CSV schemas and GIS (non-blocking)
+        run: python3 scripts/probe_prepared.py
