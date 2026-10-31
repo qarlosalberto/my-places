@@ -310,78 +310,179 @@ $('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains(
 function updateFilterBadge(){const count=['search','filterGroup','filterRating','filterSize','filterVisibility'].filter(id=>val(id)).length;const badge=$('filterCount');if(badge)badge.textContent=count?'('+count+')':''}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',updateFilterBadge);
 
-/* PDF report of the currently selected map and filters */
-function loadReportScript(src,globalName){
- if(window[globalName])return Promise.resolve();
- return new Promise((resolve,reject)=>{
-  const el=document.createElement('script');el.src=src;el.onload=()=>window[globalName]?resolve():reject(Error('PDF library unavailable'));el.onerror=()=>reject(Error('Could not load PDF library'));document.head.append(el);
+/* Self-contained PDF export: no third-party PDF/HTML screenshot scripts. */
+const reportBytes=s=>new TextEncoder().encode(s);
+function reportText(s){
+ const replacements={'’':"'",'‘':"'",'“':'"','”':'"','–':'-','—':'-','•':'-','…':'...','€':'EUR','™':'TM','œ':'oe','Œ':'OE'};
+ let out='';
+ for(const char of String(s??'').replace(/[\r\n\t]+/g,' ')){
+  const c=replacements[char]??char,code=c.charCodeAt(0);
+  for(const ch of c){
+   const n=ch.charCodeAt(0);
+   if(ch==='('||ch===')'||ch==='\\')out+='\\'+ch;
+   else if(n>=32&&n<=126)out+=ch;
+   else if(n>=160&&n<=255)out+='\\'+n.toString(8).padStart(3,'0');
+   else if(n>126)out+='?';
+  }
+ }
+ return out;
+}
+function reportWrap(value,max=89){
+ const out=[];for(const paragraph of String(value??'').split(/\r?\n/)){
+  let line='';
+  for(const word of paragraph.split(/\s+/)){
+   if(!word)continue;
+   if((line+' '+word).trim().length>max&&line){out.push(line);line=''}
+   if(word.length>max){if(line){out.push(line);line=''}for(let i=0;i<word.length;i+=max)out.push(word.slice(i,i+max))}
+   else line+=(line?' ':'')+word;
+  }
+  if(line)out.push(line);
+ }
+ return out.length?out:[''];
+}
+function makePdfDocument(pages,canvas){
+ const width=canvas.width,height=canvas.height;
+ const binary=atob(canvas.toDataURL('image/jpeg',0.84).split(',')[1]);
+ const jpeg=Uint8Array.from(binary,ch=>ch.charCodeAt(0));
+ const objects=[null];const add=content=>(objects.push(content),objects.length-1);
+ const pagesId=add(''),regular=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'),
+ bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+ const imageId=add([reportBytes('<< /Type /XObject /Subtype /Image /Width '+width+' /Height '+height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jpeg.length+' >>\nstream\n'),jpeg,reportBytes('\nendstream')]);
+ const pageIds=[];
+ pages.forEach(commands=>{
+  const content=reportBytes(commands.join('\n')+'\n');
+  const streamId=add([reportBytes('<< /Length '+content.length+' >>\nstream\n'),content,reportBytes('endstream')]);
+  pageIds.push(add('<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 '+regular+' 0 R /F2 '+bold+' 0 R >> /XObject << /Im0 '+imageId+' 0 R >> >> /Contents '+streamId+' 0 R >>'));
  });
+ objects[pagesId]='<< /Type /Pages /Kids ['+pageIds.map(id=>id+' 0 R').join(' ')+'] /Count '+pageIds.length+' >>';
+ const catalog=add('<< /Type /Catalog /Pages '+pagesId+' 0 R >>');
+ const sections=[reportBytes('%PDF-1.4\n%PDF map report\n')],offsets=[0];let length=sections[0].length;
+ for(let i=1;i<objects.length;i++){
+  offsets[i]=length;
+  const segments=[reportBytes(i+' 0 obj\n'),...(Array.isArray(objects[i])?objects[i]:[reportBytes(objects[i])]),reportBytes('\nendobj\n')];
+  for(const part of segments){sections.push(part);length+=part.length}
+ }
+ const xrefOffset=length;
+ let xref='xref\n0 '+objects.length+'\n0000000000 65535 f \n';
+ for(let i=1;i<objects.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+ xref+='trailer\n<< /Size '+objects.length+' /Root '+catalog+' 0 R >>\nstartxref\n'+xrefOffset+'\n%%EOF\n';
+ sections.push(reportBytes(xref));
+ return new Blob(sections,{type:'application/pdf'});
+}
+function drawReportCanvas(points){
+ const W=1100,H=620,padding=85;
+ const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
+ const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('Map drawing not available');
+ ctx.fillStyle='#e9f1f7';ctx.fillRect(0,0,W,H);
+ const project=(p,z)=>{
+  const lat=Math.max(-85.051128,Math.min(85.051128,Number(p.lat)))*Math.PI/180;
+  const scale=256*Math.pow(2,z);
+  return {x:(Number(p.lng)+180)/360*scale,y:(1-Math.log(Math.tan(lat)+1/Math.cos(lat))/Math.PI)/2*scale};
+ };
+ let zoom=14,coordinates=[],lo,hi;
+ if(points.length>1){
+  for(let z=16;z>=0;z--){
+   const projected=points.map(p=>project(p,z));
+   const xs=projected.map(p=>p.x),ys=projected.map(p=>p.y);
+   const dx=Math.max(...xs)-Math.min(...xs),dy=Math.max(...ys)-Math.min(...ys);
+   if(dx<=W-2*padding&&dy<=H-2*padding){zoom=z;break}
+  }
+ }
+ coordinates=points.map(p=>project(p,zoom));
+ const cx=(Math.min(...coordinates.map(p=>p.x))+Math.max(...coordinates.map(p=>p.x)))/2;
+ const cy=(Math.min(...coordinates.map(p=>p.y))+Math.max(...coordinates.map(p=>p.y)))/2;
+ const worldTiles=Math.pow(2,zoom);
+ const tx0=Math.floor((cx-W/2)/256),tx1=Math.floor((cx+W/2)/256);
+ const ty0=Math.max(0,Math.floor((cy-H/2)/256)),ty1=Math.min(worldTiles-1,Math.floor((cy+H/2)/256));
+ return {canvas,ctx,zoom,coordinates,cx,cy,W,H,tx0,tx1,ty0,ty1,worldTiles};
+}
+function reportTile(url){
+ return new Promise(resolve=>{
+  const img=new Image();img.crossOrigin='anonymous';let settled=false;
+  const finish=result=>{if(settled)return;settled=true;clearTimeout(timer);img.onload=null;img.onerror=null;resolve(result)};
+  const timer=setTimeout(()=>finish(null),6500);
+  img.onload=()=>finish(img);img.onerror=()=>finish(null);img.src=url;
+ });
+}
+async function makeReportMap(places){
+ const d=drawReportCanvas(places);
+ const {ctx,W,H,coordinates,cx,cy,zoom,worldTiles}=d;
+ const tiles=[];
+ for(let tx=d.tx0;tx<=d.tx1;tx++)for(let ty=d.ty0;ty<=d.ty1;ty++){
+  tiles.push({tx,ty,promise:reportTile('https://tile.openstreetmap.org/'+zoom+'/'+((tx%worldTiles+worldTiles)%worldTiles)+'/'+ty+'.png')});
+ }
+ let loaded=0;
+ const images=await Promise.all(tiles.map(async t=>({...t,image:await t.promise})));
+ for(const tile of images)if(tile.image){
+  try{ctx.drawImage(tile.image,Math.round(tile.tx*256-cx+W/2),Math.round(tile.ty*256-cy+H/2),257,257);loaded++}catch(e){console.warn('Map tile could not be drawn',e)}
+ }
+ if(!loaded){
+  ctx.strokeStyle='#ccd9e5';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=90){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=90){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  ctx.fillStyle='#617991';ctx.font='20px sans-serif';ctx.fillText('Map tiles unavailable - point positions shown',25,35);
+ }
+ coordinates.forEach((p,i)=>{
+  const x=p.x-cx+W/2,y=p.y-cy+H/2;
+  ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fillStyle='#236bd5';ctx.fill();
+  ctx.lineWidth=4;ctx.strokeStyle='#fff';ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='bold 17px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(i+1),x,y+1);
+ });
+ ctx.textAlign='left';ctx.textBaseline='alphabetic';
+ ctx.fillStyle='#ffffff';ctx.fillRect(0,H-24,W,24);
+ ctx.font='13px sans-serif';ctx.fillStyle='#4a6079';
+ ctx.fillText('Map data © OpenStreetMap contributors',12,H-7);
+ return {canvas:d.canvas,tilesLoaded:loaded};
 }
 async function exportFilteredPdf(){
  const button=$('exportPdf'),items=relevant();
  if(!items.length){toast('No places match the current filters.');return}
- const valid=items.filter(p=>Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180);
+ const valid=items.filter(p=>Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=85&&Math.abs(Number(p.lng))<=180);
  if(!valid.length){toast('No valid coordinates to map.');return}
  button.disabled=true;button.textContent='Preparing PDF…';
- let canvasMap=null,previewMap=null;
  try{
-  await Promise.all([
-   loadReportScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js','jspdf'),
-   loadReportScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js','html2canvas')
-  ]);
-  const container=document.createElement('div');
-  canvasMap=container;
-  Object.assign(container.style,{position:'fixed',left:'0',top:'-1200px',width:'900px',height:'510px',zIndex:'-1',background:'#e6edf4'});
-  document.body.append(container);
-  previewMap=L.map(container,{zoomControl:false,attributionControl:false,fadeAnimation:false,zoomAnimation:false});
-  const tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,crossOrigin:true});
-  tiles.addTo(previewMap);
-  const bounds=L.latLngBounds(valid.map(p=>[Number(p.lat),Number(p.lng)]));
-  if(valid.length===1)previewMap.setView(bounds.getCenter(),14);
-  else previewMap.fitBounds(bounds,{padding:[55,55],maxZoom:14,animate:false});
-  valid.forEach((p,index)=>{
-   const point=[Number(p.lat),Number(p.lng)];
-   L.circleMarker(point,{radius:11,color:'#ffffff',weight:3,fillColor:'#236bd5',fillOpacity:1}).addTo(previewMap);
-   L.marker(point,{icon:L.divIcon({className:'pdfPlaceNumber',html:'<span>'+String(index+1)+'</span>',iconSize:[24,24],iconAnchor:[12,12]})}).addTo(previewMap);
-  });
-  previewMap.invalidateSize();
-  await Promise.race([new Promise(resolve=>tiles.once('load',resolve)),new Promise(resolve=>setTimeout(resolve,5500))]);
-  await new Promise(resolve=>setTimeout(resolve,300));
-  const image=await window.html2canvas(container,{useCORS:true,allowTaint:false,backgroundColor:'#e6edf4',scale:1,logging:false});
-  const {jsPDF}=window.jspdf;const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210,M=14,usable=W-2*M;
-  const currentMap=val('activeMap')||'My Places';
-  let y=18;
-  pdf.setFont('helvetica','bold');pdf.setFontSize(21);pdf.setTextColor(25,53,93);pdf.text('My Places',M,y);
-  y+=9;pdf.setFontSize(12);pdf.text(currentMap,M,y);y+=8;
-  pdf.setFont('helvetica','normal');pdf.setFontSize(9);pdf.setTextColor(95,113,138);
-  const filterInfo=[['Group','filterGroup'],['Rating','filterRating'],['Size','filterSize'],['Visibility','filterVisibility'],['Search','search']]
-    .filter(([,id])=>val(id)).map(([name,id])=>name+': '+val(id)).join('  |  ');
-  if(filterInfo){for(const line of pdf.splitTextToSize(filterInfo,usable)){pdf.text(line,M,y);y+=5}}
-  pdf.text(valid.length+' places  •  '+new Date().toLocaleDateString('en-GB'),M,y);y+=6;
-  const mapHeight=usable*510/900;
-  pdf.addImage(image.toDataURL('image/jpeg',0.87),'JPEG',M,y,usable,mapHeight);y+=mapHeight+9;
-  pdf.setFont('helvetica','bold');pdf.setTextColor(25,53,93);pdf.setFontSize(13);pdf.text('Places',M,y);y+=8;
+  const {canvas,tilesLoaded}=await makeReportMap(valid);
+  const pages=[[]];let page=pages[0],y=45;
+  const text=(value,size=10,bold=false,color=[30,53,85],x=40)=>{
+   const escaped=reportText(value);
+   page.push('BT /'+(bold?'F2':'F1')+' '+size+' Tf '+color.map(n=>(n/255).toFixed(3)).join(' ')+' rg 1 0 0 1 '+x+' '+(841.89-y).toFixed(2)+' Tm ('+escaped+') Tj ET');
+  };
+  const nextPage=()=>{page=[];pages.push(page);y=43};
+  const lines=(value,size=9,bold=false,max=100,color=[70,87,109])=>{
+   for(const line of reportWrap(value,max)){if(y>797)nextPage();text(line,size,bold,color);y+=size+4}
+  };
+  const chosenMap=val('activeMap')||'My Places';
+  text('My Places',23,true,[27,63,109]);y+=26;
+  lines(chosenMap,13,true,73,[38,91,163]);y+=3;
+  const filters=[['Group','filterGroup'],['Rating','filterRating'],['Size','filterSize'],['Visibility','filterVisibility'],['Search','search']]
+   .filter(([,id])=>val(id)).map(([label,id])=>label+': '+val(id)).join('  |  ');
+  if(filters)lines(filters,9,false,105);
+  lines(valid.length+' places  |  '+new Date().toLocaleDateString('en-GB'),9);
+  y+=10;
+  const mapW=515,mapH=mapW*canvas.height/canvas.width;
+  if(y+mapH>695)nextPage();
+  page.push('q '+mapW.toFixed(2)+' 0 0 '+mapH.toFixed(2)+' 40 '+(841.89-y-mapH).toFixed(2)+' cm /Im0 Do Q');
+  y+=mapH+23;
+  if(y>785)nextPage();
+  text('Places',15,true,[27,63,109]);y+=22;
   for(let i=0;i<valid.length;i++){
    const p=valid[i];
-   const heading=(i+1)+'. '+(p.title||'Untitled place');
-   const line=[p.group||'No group','Rating: '+(p.rating||'Good'),'Size: '+(p.size||"Doesn't matter"),'Visibility: '+(p.visibility||'Not sure')].join('  |  ');
-   const coords=Number(p.lat).toFixed(7)+', '+Number(p.lng).toFixed(7);
-   const titleLines=pdf.splitTextToSize(heading,usable);
-   const detailLines=pdf.splitTextToSize(line,usable);
-   const descLines=p.description?pdf.splitTextToSize(String(p.description),usable):[];
-   const needed=titleLines.length*5.2+detailLines.length*4.4+descLines.length*4.4+10;
-   if(y+Math.min(needed,24)>280){pdf.addPage();y=20}
-   pdf.setFont('helvetica','bold');pdf.setFontSize(10);pdf.setTextColor(28,65,117);
-   for(const t of titleLines){if(y>283){pdf.addPage();y=20}pdf.text(t,M,y);y+=5.2}
-   pdf.setFont('helvetica','normal');pdf.setFontSize(8.4);pdf.setTextColor(75,90,112);
-   for(const t of detailLines.concat([coords]).concat(descLines)){if(y>283){pdf.addPage();y=20}pdf.text(t,M,y);y+=4.4}
-   y+=5;
+   if(y>757)nextPage();
+   lines((i+1)+'. '+(p.title||'Untitled place'),11,true,85,[27,63,109]);
+   lines('Group: '+(p.group||'No group')+'  |  Rating: '+(p.rating||'Good')+'  |  Size: '+(p.size||"Doesn't matter")+'  |  Visibility: '+(p.visibility||'Not sure'),8.5,false,105);
+   lines(Number(p.lat).toFixed(7)+', '+Number(p.lng).toFixed(7),8.5);
+   if(p.description)lines(String(p.description),9,false,102);
+   y+=10;
   }
-  const cleanName=currentMap.replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').slice(0,55)||'places';
-  pdf.save('My-Places-'+cleanName+'.pdf');
-  toast('PDF downloaded with '+valid.length+' places.');
- }catch(e){err(e)}
- finally{if(previewMap)previewMap.remove();if(canvasMap)canvasMap.remove();button.disabled=false;button.textContent='⬇ Export PDF'}
+  pages.forEach((commands,index)=>{
+   commands.push('BT /F1 8 Tf 0.48 0.53 0.62 rg 1 0 0 1 40 22 Tm ('+reportText('Page '+(index+1)+' / '+pages.length)+') Tj ET');
+  });
+  const blob=makePdfDocument(pages,canvas);
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='My-Places-'+chosenMap.replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').slice(0,55)+'.pdf';
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  toast(tilesLoaded?'PDF ready with '+valid.length+' filtered places.':'PDF ready; map tiles were unavailable, but numbered positions are included.');
+ }catch(e){console.error('PDF export failed',e);toast('PDF export failed: '+(e.message||e))}
+ finally{button.disabled=false;button.textContent='⬇ Export PDF'}
 }
 $('exportPdf').onclick=exportFilteredPdf;
