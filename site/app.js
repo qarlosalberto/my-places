@@ -461,7 +461,7 @@ async function exportFilteredPdf(){
  button.disabled=true;button.textContent='Preparing PDF…';
  try{
   const {canvas,tilesLoaded}=await makeReportMap(valid);
-  const pages=[[]];let page=pages[0],y=45;
+  const pages=[[]],pdfPhotos=[];let skippedPhotos=0;let page=pages[0],y=45;
   const text=(value,size=10,bold=false,color=[30,53,85],x=40)=>{
    const escaped=reportText(value);
    page.push('BT /'+(bold?'F2':'F1')+' '+size+' Tf '+color.map(n=>(n/255).toFixed(3)).join(' ')+' rg 1 0 0 1 '+x+' '+(841.89-y).toFixed(2)+' Tm ('+escaped+') Tj ET');
@@ -491,16 +491,28 @@ async function exportFilteredPdf(){
    lines('Group: '+(p.group||'No group')+'  |  Rating: '+(p.rating||'Good')+'  |  Size: '+(p.size||"Doesn't matter")+'  |  Visibility: '+(p.visibility||'Not sure'),8.5,false,105);
    lines(Number(p.lat).toFixed(7)+', '+Number(p.lng).toFixed(7),8.5);
    if(p.description)lines(String(p.description),9,false,102);
+   if(p.photoExists){
+    button.textContent='Adding photos ('+(i+1)+'/'+valid.length+')…';
+    const photo=await reportPlacePhoto(p,i);
+    if(photo){
+     pdfPhotos.push(photo);
+     const pictureScale=Math.min(265/photo.width,155/photo.height,1);
+     const pictureWidth=photo.width*pictureScale,pictureHeight=photo.height*pictureScale;
+     if(y+pictureHeight+15>786)nextPage();
+     page.push('q '+pictureWidth.toFixed(2)+' 0 0 '+pictureHeight.toFixed(2)+' 40 '+(841.89-y-pictureHeight).toFixed(2)+' cm /'+photo.alias+' Do Q');
+     y+=pictureHeight+10;
+    }else skippedPhotos++;
+   }
    y+=10;
   }
   pages.forEach((commands,index)=>{
    commands.push('BT /F1 8 Tf 0.48 0.53 0.62 rg 1 0 0 1 40 22 Tm ('+reportText('Page '+(index+1)+' / '+pages.length)+') Tj ET');
   });
-  const blob=makePdfDocument(pages,canvas);
+  const blob=makePdfDocument(pages,canvas,pdfPhotos);
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='My-Places-'+chosenMap.replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').slice(0,55)+'.pdf';
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-  toast(tilesLoaded?'PDF ready with '+valid.length+' filtered places.':'PDF ready; map tiles were unavailable, but numbered positions are included.');
+  toast('PDF ready: '+valid.length+' places, '+pdfPhotos.length+' photos.'+(skippedPhotos?' '+skippedPhotos+' photos unavailable.':'')+(!tilesLoaded?' Map tiles unavailable.':''));
  }catch(e){console.error('PDF export failed',e);toast('PDF export failed: '+(e.message||e))}
  finally{button.disabled=false;button.textContent='⬇ Export PDF'}
 }
