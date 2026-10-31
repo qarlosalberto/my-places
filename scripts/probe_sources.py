@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
-"""Read-only diagnostic; prints schema names, never raw personal data."""
+"""Print schema of official datasets, never raw user data; diagnostic only."""
 import json
 import urllib.request
 from urllib.parse import urlencode
 
-for resource_id in (90, 91, 94, 95, 378, 379):
-    query={"resource_id":resource_id,"formato":"json"}
-    if resource_id in (378,379):
-        query["filters"]='{"cod_elec":"CA2023"}'
-    url="https://opendata.aragon.es/GA_OD_Core/download?"+urlencode(query)
-    req=urllib.request.Request(url,headers={"User-Agent":"AtlasElectoralZaragoza/1.0 (+github.com/qarlosalberto/my-places)"})
+cases=[
+ (94, {"cod_elec":"CA2023","cod_provincia":"50"}),
+ (95, {"cod_elec":"CA2023","cod_provincia":"50"}),
+ (378,{"cod_elec":"CA2023","cod_provincia":"50"}),
+ (379,{"cod_elec":"CA2023","cod_provincia":"50"}),
+]
+for resource_id, filters in cases:
+    url="https://opendata.aragon.es/GA_OD_Core/download?"+urlencode({"resource_id":resource_id,"formato":"json","filters":json.dumps(filters)})
+    req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 AtlasElectoralZaragoza/1.0"})
     try:
-        with urllib.request.urlopen(req,timeout=22) as f:
-            raw=f.read(80000)
-            print("RESOURCE",resource_id,"status",f.status,"type",f.headers.get("Content-Type"),"sample_bytes",len(raw))
-        text=raw.decode('utf-8-sig',errors='replace')
-        try:
-            value=json.loads(text)
-            print("ROOT",type(value).__name__,"keys",list(value)[:20] if isinstance(value,dict) else "len="+str(len(value)))
-            row=value[0] if isinstance(value,list) and value else next((v[0] for v in value.values() if isinstance(v,list) and v),None) if isinstance(value,dict) else None
-            if isinstance(row,dict):print("ROW KEYS",list(row)[:40])
-            else:print("PREFIX",text[:220].replace("\n"," "))
-        except Exception as e:
-            print("PARTIAL JSON","prefix",text[:220].replace("\n"," "),str(e)[:100])
+        with urllib.request.urlopen(req,timeout=12) as f:
+            raw=f.read(12000)
+            print("RESOURCE",resource_id,"status",f.status,"type",f.headers.get("Content-Type"),"bytes",len(raw),flush=True)
+        txt=raw.decode("utf-8-sig",errors="replace")
+        if txt.startswith("[{"):
+            obj,_=json.JSONDecoder().raw_decode(txt[1:])
+            print("ROW",resource_id,repr(obj)[:2000],flush=True)
+        else:
+            print("PREFIX",resource_id,txt[:400],flush=True)
     except Exception as e:
-        print("RESOURCE",resource_id,"ERROR",str(e)[:220])
+        print("SOURCE ERROR",resource_id,str(e)[:250],flush=True)
