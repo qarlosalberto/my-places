@@ -42,3 +42,18 @@ El script `scripts/build_elections.py` descarga y convierte los CSV, simplifica 
 GitHub Pages publica `site/` desde `main`, tras CI y comprobaciones del workflow de despliegue. Para una actualización: modificar el ETL, ejecutar el workflow de construcción, examinar hashes, cobertura, cruces y exclusiones, validar y fusionar los commits revisados.
 
 La parte de capturar lugares conserva sus mapas, fotografías, importación/exportación y login originales.
+
+
+## Pestaña «Tendencias del voto» (octubre 2026)
+
+Muestra cambios **descriptivos**, no un algoritmo de oportunidad política ni recomendaciones de dónde dirigir una campaña. Se pueden seleccionar de manera independiente:
+
+- PSOE, IU/Podemos/Sumar o su suma (categorías históricas normalizadas por la fuente). **No** se asigna automáticamente el grupo \`OTROS\` a la izquierda.
+- Tipos de elecciones disponibles y municipios / secciones censales. Los tipos no se suman ni se comparan entre sí.
+- Dos convocatorias, inicialmente los extremos disponibles de la década anterior a la última convocatoria del mismo tipo y detalle (p. ej., generales 2015–2023, no 2016–2026).
+- Cambio de votos absolutos, diferencia porcentual en puntos, cambio de participación, abstención absoluta y variación del censo. **No se combinan en una puntuación de targeting**.
+- Para un territorio seleccionado se ve la evolución en las convocatorias intermedias, los números y los porcentajes.
+
+El cambio porcentual se omite cuando no son equivalentes los denominadores de ambas convocatorias; el cambio absoluto de los votos agrupados se mantiene visible. La cartografía por sección es una **aproximación histórica** (polígonos 2023); un código coincidente en dos fechas no demuestra límites idénticos ni identidad del electorado. **No es un mapa de barrios oficiales.** Los polígonos sin datos en ambos extremos se dejan gris claro, en lugar de asignarles un cero ficticio.
+
+Esta pestaña utiliza el mismo control de autenticación y superposición voluntaria de puntos personales que los demás mapas del atlas. Los puntos privados nunca se incorporan a los datasets electorales publicados.
