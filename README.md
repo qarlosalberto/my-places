@@ -20,3 +20,11 @@ Mobile-first, English-language place journal hosted with GitHub Pages.
 7. Once Pages completes, open https://qarlosalberto.github.io/my-places/ and check invited and uninvited Google accounts.
 
 The Firebase Spark plan offers free quotas; monitor usage. The site needs HTTPS and location permission for GPS. Firebase Authentication may register a non-invited Google account, but Firestore rules must prohibit that person from accessing places. Before inviting others, provide a proper privacy notice. The CSV feature is not a full backup because photos are omitted.
+
+## Nueva portada y atlas electoral de Zaragoza
+- Entrada inicial con **Capturar lugares** y **Atlas electoral**.
+- Enlaces internos `#home`, `#carteles` y `#atlas` aptos para GitHub Pages, sin backend adicional.
+- El atlas público tiene vistas de mapa, comparación, evolución, participación y metodología. Comparte Firebase Authentication y puede mostrar **solo con consentimiento (capa desactivada por defecto)** los puntos guardados de la cuenta autorizada.
+- El atlas solo presenta resultados reales incluidos en `site/data/catalog.json`. **Estado actual: todavía no están integrados los ficheros históricos oficiales.** No se utilizan datos simulados ni se extrapolan cifras municipales a secciones censales.
+- Contrato de datos, fuentes y controles de calidad en [ATLAS-DATOS.md](ATLAS-DATOS.md). Validador: `python3 scripts/validate_atlas.py`.
+- El sitio sigue sin requerir proceso de compilación. El workflow publica `site/` en GitHub Pages.
