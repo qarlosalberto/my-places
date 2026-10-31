@@ -141,6 +141,11 @@ function renderInfo(){
  kv(stats,'Participación',percent(valueFor(r,'participation')));
  kv(stats,'Abstención',countFor(r,'electorate')===null||countFor(r,'voters')===null?'—':fmt.format(valueFor(r,'abstention')));
  root.append(stats);
+ const denominator=r.denominator==='candidaturas'||(!r.denominator&&e?.denominator?.startsWith('votos a candidaturas'))
+ ? 'Porcentajes sobre votos a candidaturas: la fuente histórica no ofrece blancos en esta unidad; no equivale al porcentaje sobre todos los votos válidos.'
+ : 'Porcentajes sobre votos válidos cuando se dispone del desglose completo.';
+ note(root,denominator);
+ if(e?.boundary_note)note(root,'Advertencia: '+e.boundary_note);
  const total=totalValid(r);
  for(const [group,amount] of Object.entries(r.votes||{}).sort((a,b)=>Number(b[1])-Number(a[1]))){
   const holder=document.createElement('div');holder.className='atlasResult';const line=document.createElement('div');line.className='atlasResultHeader';
