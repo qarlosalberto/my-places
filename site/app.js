@@ -94,13 +94,14 @@ $('newCategory').oninput=()=>chooseGroups();
 function openEditor(p=null){stopPrecision(false);addressSequence++;lastResolvedAddress='';lastResolvedKey='';autoTitle='';titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
  for(const id of ['title','description','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=p?.size||"Doesn't matter";$('visibility').value=p?.visibility||'Not sure';
- makeSelect('category',categories(),'Select a map',p?.map||val('activeMap')||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);hide('manualGpsControls',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('editor').showModal();initPrecisionMap();if(!p){$('gps').click()}
+ makeSelect('category',categories(),'Select a map',p?.map||val('activeMap')||'');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);hide('manualGpsControls',!p);hide('titleEntry',!p);hide('coordinateEntry',!p);hide('locationMapDetails',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('placeForm').querySelector('button[type=submit]').disabled=!p;$('editor').showModal();if(p)initPrecisionMap();else{$('gpsStatus').textContent='Getting GPS position…';$('gps').click()}
  if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
 }
 $('new').onclick=()=>openEditor();$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
 $('editor').addEventListener('close',()=>stopPrecision(false));
 function updatePrecisionPosition(lat,lng,moveView=true){
  $('lat').value=Number(lat).toFixed(7);$('lng').value=Number(lng).toFixed(7);
+ if(!selected&&$('editor').open)$('placeForm').querySelector('button[type=submit]').disabled=false;
  if(!precisionMap)return;
  const point=[Number(lat),Number(lng)];
  if(precisionMarker)precisionMarker.setLatLng(point);
@@ -223,7 +224,7 @@ $('choosePhoto').onclick=()=>$('photo').click();
 $('cameraPhoto').onchange=selectedPhoto;
 $('photo').onchange=selectedPhoto;
 async function getPhoto(p){if(photoUrls.has(p.id))return photoUrls.get(p.id);const snap=await getDoc(doc(db,'users',user.uid,'places',p.id,'photos','main'));const src=snap.exists()?snap.data().image:null;photoUrls.set(p.id,src);return src}
-$('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;const lat=Number(val('lat')),lng=Number(val('lng'));if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Invalid coordinates');
+$('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;if(val('lat')===''||val('lng')===''){toast('Waiting for GPS position.');return}const lat=Number(val('lat')),lng=Number(val('lng'));if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Invalid coordinates');
  const cat=val('newCategory')||val('category'),group=val('newGroup')||val('group');if(!cat)return toast('Select or create a map');
  const titleKey=lat.toFixed(5)+','+lng.toFixed(5);if(!titleManuallyEdited&&!addressCache.has(titleKey)&&lastResolvedKey!==titleKey)await lookupAddress(lat,lng);
  const fallbackTitle=addressCache.get(titleKey)||(lastResolvedKey===titleKey?lastResolvedAddress:'')||lat.toFixed(7)+', '+lng.toFixed(7);const finalTitle=(titleManuallyEdited&&val('title'))?val('title'):fallbackTitle;$('title').value=finalTitle;
