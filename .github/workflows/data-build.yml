@@ -1,0 +1,39 @@
+name: Construir datos electorales de Zaragoza
+on:
+  push:
+    branches: [feature/atlas-electoral-zaragoza]
+    paths: [scripts/build_elections.py, .github/workflows/data-build.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: elections-build
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Descargar, procesar y comprobar datos
+        run: |
+          python3 scripts/build_elections.py
+          python3 scripts/validate_atlas.py
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Publicar conjuntos en la rama de trabajo
+        if: github.ref_name == 'feature/atlas-electoral-zaragoza'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site/data
+          if git diff --cached --quiet; then
+            echo 'Sin cambios en los datos'
+          else
+            git commit -m 'data: publicar resultados históricos verificados de Zaragoza'
+            git push origin HEAD:feature/atlas-electoral-zaragoza
+          fi
