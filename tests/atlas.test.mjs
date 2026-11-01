@@ -7,25 +7,25 @@ const app=fs.readFileSync('site/app.js','utf8');
 const atlas=fs.readFileSync('site/atlas.js','utf8');
 const style=fs.readFileSync('site/style.css','utf8');
 
-test('single page exposes both entrances and existing editor',()=>{
-  for(const id of ['home','dashboard','atlas','cartelesGate','login','logout','editor','atlasMap','atlasPins','atlasExtra','atlasSliderBox'])
+test('public HTML only exposes markers and Google login',()=>{
+  for(const id of ['dashboard','cartelesGate','login','logout','editor','map','mapTab','listTab'])
     assert.match(html,new RegExp('id="'+id+'"'));
   const ids=[...html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]);
   assert.equal(new Set(ids).size,ids.length,'duplicate HTML IDs');
-  assert.match(html,/href="#carteles"/);
-  assert.match(html,/href="#atlas"/);
+  assert.doesNotMatch(html,/id="home"|id="atlas"|href="#atlas"|data-atlas-tab=/);
+  assert.doesNotMatch(html,/href="#home"/);
 });
-test('all direct atlas element references exist in HTML',()=>{
-  const ids=new Set([...html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]));
-  const used=[...atlas.matchAll(/el\('([^']+)'\)/g)].map(x=>x[1]);
-  for(const id of used)assert.ok(ids.has(id),'atlas element missing: '+id);
+test('archived electoral modules remain but are not imported by the public app',()=>{
+  assert.match(atlas,/function renderMap/);
+  assert.match(atlas,/function renderHistory/);
+  assert.doesNotMatch(app,/from ['"]\.\/atlas\.js|initAtlas\(|showAtlas\(|updateAtlasPlaces\(/);
+  assert.match(app,/function showMarkers\(\)/);
+  assert.match(app,/hide\('dashboard',!user\)/);
 });
 test('authentication and personal data use same user scope',()=>{
   assert.match(app,/onAuthStateChanged\(auth/);
   assert.match(app,/getDoc\(doc\(db,'invites',u.email.toLowerCase\(\)\)\)/);
   assert.match(app,/collection\(db,'users',u.uid,'places'\)/);
-  assert.match(app,/updateAtlasPlaces\(places,true\)/);
-  assert.match(app,/updateAtlasPlaces\(\[\],false\)/);
   assert.match(atlas,/state.authorized&&el\('atlasPins'\).checked/);
 });
 test('style preserves original editor/map and new atlas',()=>{
