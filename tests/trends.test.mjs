@@ -56,12 +56,11 @@ test('record missing from either election remains missing rather than interprete
  assert.equal(trend.compareTerritory(null,end),null);
  assert.equal(trend.trendValue(null,'turnoutChange'),null);
 });
-test('tab keeps personal points behind existing opt-in and exposes all historical controls',()=>{
+test('electoral trends source remains archived while no public tab exists',()=>{
  assert.match(atlas,/createTrendTab/);
  assert.match(atlas,/trendTab\?\.refreshPins\(\)/);
  assert.match(src,/privateInfo\.authorized\|\|!privateInfo\.enabled/);
- for(const id of ['atlasTrendsScreen','atlasTrendMap','atlasTrendType','atlasTrendLevel','atlasTrendGroup','atlasTrendMetric','atlasTrendFrom','atlasTrendTo','atlasTrendInfo','atlasTrendHistory']){
-  assert.match(html,new RegExp('id="'+id+'"'),'missing element '+id);
- }
- assert.match(html,/data-atlas-tab="trends"/);
+ assert.doesNotMatch(html,/id="atlasTrendsScreen"|data-atlas-tab="trends"/);
+ assert.doesNotMatch(fs.readFileSync('site/app.js','utf8'),/from ['"]\.\/atlas\.js/);
+ assert.ok(fs.existsSync('site/data/catalog.json'));
 });

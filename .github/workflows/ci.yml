@@ -23,6 +23,12 @@ jobs:
           node --input-type=module --check < site/trends.js
       - name: Validate static data
         run: python3 scripts/validate_atlas.py
+      - name: Verificar que el sitio público excluye el atlas
+        run: |
+          python3 scripts/build_public_site.py --output _ci_public
+          test -f _ci_public/app.js
+          test ! -e _ci_public/atlas.js
+          test ! -e _ci_public/data
       - name: Unit and integration checks
         run: |
           python3 -m unittest discover -s tests -p 'test_*.py' -v

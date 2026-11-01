@@ -22,10 +22,17 @@ jobs:
         run: |
           node --input-type=module --check < site/app.js
           node --input-type=module --check < site/atlas.js
+          node --input-type=module --check < site/trends.js
           python3 scripts/validate_atlas.py
+      - name: Construir paquete público solo de marcadores
+        run: |
+          python3 scripts/build_public_site.py --output _public
+          test ! -e _public/atlas.js
+          test ! -e _public/trends.js
+          test ! -e _public/data
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./site
+          path: ./_public
       - id: deployment
         uses: actions/deploy-pages@v4
