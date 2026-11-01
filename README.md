@@ -16,17 +16,21 @@ Mobile-first, English-language place journal hosted with GitHub Pages.
 3. In Firestore Rules, manually publish `firestore.rules`. The GitHub workflow does **not** deploy Firestore rules.
 4. In Firestore Data, create `invites` and a document whose ID is your exact lowercase Google email. Give it the Boolean field `active: true`. Repeat for invited people only.
 5. Add `qarlosalberto.github.io` in Firebase Authentication → Settings → Authorized domains.
-6. In GitHub Settings → Pages, select **GitHub Actions** as deployment source. The workflow deploys the `site/` folder.
+6. In GitHub Settings → Pages, select **GitHub Actions** as deployment source. The workflow deploys a reduced `_public/` artifact containing only the markers app; the electoral source and data remain in GitHub but are not deployed.
 7. Once Pages completes, open https://qarlosalberto.github.io/my-places/ and check invited and uninvited Google accounts.
 
 The Firebase Spark plan offers free quotas; monitor usage. The site needs HTTPS and location permission for GPS. Firebase Authentication may register a non-invited Google account, but Firestore rules must prohibit that person from accessing places. Before inviting others, provide a proper privacy notice. The CSV feature is not a full backup because photos are omitted.
 
-## Nueva portada y atlas electoral de Zaragoza
-- Entrada inicial con **Capturar lugares** y **Atlas electoral**.
-- Enlaces internos `#home`, `#carteles` y `#atlas` aptos para GitHub Pages, sin backend adicional.
-- El atlas público tiene vistas de mapa, comparación, evolución, participación y metodología. Comparte Firebase Authentication y puede mostrar **solo con consentimiento (capa desactivada por defecto)** los puntos guardados de la cuenta autorizada.
-- El atlas solo presenta resultados reales incluidos en `site/data/catalog.json`. **Estado actual: 45 capas: generales, municipales y europeas entre 2000 y 2024, más autonómicas de Aragón 2003–2026.** No se utilizan datos simulados ni se extrapolan cifras municipales a secciones censales. Atención: el seccionado cartográfico de 2023 no coincide necesariamente con el histórico.
-- Contrato de datos, fuentes y controles de calidad en [ATLAS-DATOS.md](ATLAS-DATOS.md). Validador: `python3 scripts/validate_atlas.py`.
-- El sitio sigue sin requerir proceso de compilación. El workflow publica `site/` en GitHub Pages.
+## Sitio público: solo marcadores
 
-- Autonómicas de Aragón: importación reproducible desde Aragón Open Data CKAN con `python3 scripts/build_aragon.py`. Siete elecciones autonómicas desde 2003 y detalle de sección en 2026; no hubo convocatoria de estas cuatro clases en Zaragoza durante 2025. La cartografía por sección es de referencia 2023 y no equivale a límites históricos idénticos.
+La página https://qarlosalberto.github.io/my-places/ abre directamente la aplicación privada de **lugares y marcadores**. Se mantiene el acceso con Google, la comprobación de invitaciones de Firestore, los puntos, los mapas, las fotos y las exportaciones actuales. No hay portada de dos accesos ni enlaces al atlas electoral. Un enlace antiguo como `#atlas` tampoco activa la funcionalidad electoral.
+
+### Atlas electoral conservado para el futuro
+
+La implementación del atlas **no se ha borrado**: `site/atlas.js`, `site/trends.js`, `site/data/`, `ATLAS-DATOS.md`, scripts y tests históricos siguen versionados en este repositorio. Se podrá restaurar desde un futuro cambio explícito.
+
+Para que el atlas **tampoco esté accesible como ficheros estáticos en GitHub Pages**, `scripts/build_public_site.py` construye un paquete temporal que contiene exclusivamente `index.html`, `app.js`, el CSS básico, el icono, el manifiesto y la configuración web de Firebase. El workflow `.github/workflows/deploy.yml` publica únicamente ese paquete. CI verifica su composición.
+
+**Importante:** el repositorio GitHub es público. Por ello, los visitantes de GitHub sí pueden consultar el código electoral y los datos que conserva, aunque esos archivos ya no se sirvan desde la página web. Esta configuración **no** convierte el código del repositorio en privado.
+
+No se alteran las colecciones de Firestore ni las reglas de seguridad. Para habilitar de nuevo el atlas habrá que reponer su pantalla, su integración en `app.js` y permitir que el workflow publique sus recursos, con CI y revisión previa.
