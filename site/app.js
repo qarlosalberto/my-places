@@ -60,7 +60,7 @@ function initMap(){
  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
  markers=L.layerGroup().addTo(map);
  const LocateControl=L.Control.extend({
-  options:{position:'bottomright'},
+  options:{position:'topright'},
   onAdd(){
    const container=L.DomUtil.create('div','leaflet-bar leaflet-control myLocationControl');
    const btn=L.DomUtil.create('button','myLocationControlButton',container);
@@ -340,8 +340,8 @@ function acceptTrackingFix(pos){
   if(locationMarker)locationMarker.setLatLng(userPosition);
   else locationMarker=L.marker(userPosition,{interactive:false,zIndexOffset:1000,icon:L.divIcon({
    className:'currentPositionIcon',
-   html:'<span class="currentPositionHalo"></span><span class="currentPositionArrow" aria-hidden="true">➤</span>',
-   iconSize:[44,44],iconAnchor:[22,22]
+   html:'<span class="currentPositionHalo"></span><svg class="currentPositionArrow" aria-hidden="true" viewBox="0 0 64 64" width="48" height="48"><path d="M31 5 L54 55 L32 44 L10 55 Z" fill="#04B89E" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/></svg>',
+   iconSize:[60,60],iconAnchor:[30,30]
   })}).addTo(map).bindTooltip('You are here');
   if(!locatedOnce){map.setView(userPosition,16);locatedOnce=true}
  }
