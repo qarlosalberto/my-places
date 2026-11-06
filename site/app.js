@@ -13,6 +13,7 @@ const err=e=>{console.error(e);toast(e.message||String(e))};
 // Election modules and their datasets remain in the repository for later activation.
 function showMarkers(){
  hide('dashboard',!user);
+ hide('headerToolbar',!user);
  hide('cartelesGate',!!user);
  if(user){initMap();render();setTimeout(()=>map?.invalidateSize(),80)}
 }
