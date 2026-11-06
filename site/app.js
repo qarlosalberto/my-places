@@ -86,7 +86,7 @@ function relevant(){const q=val('search').toLowerCase();return places.filter(p=>
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',render);
 function placeFacts(p){const wrap=document.createElement('div');wrap.className='placeFacts';for(const [icon,label,value] of [['★','Rating',p.rating||'Good'],['↔','Size',p.size||"Doesn't matter"],['👁','Visibility',p.visibility||'Not sure']]){const item=document.createElement('span');item.className='placeFact';item.title=label;const symbol=document.createElement('span');symbol.className='factIcon';symbol.textContent=icon;symbol.setAttribute('aria-hidden','true');item.append(symbol,document.createTextNode(label+': '+value));wrap.append(item)}return wrap}
 function render(){
- const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');if(available.includes(pendingMapSelection))pendingMapSelection='';
+ const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');hide('mapPicker',available.length<=1);if(available.includes(pendingMapSelection))pendingMapSelection='';
  const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('activeMap')),'All groups');$('filterGroup').value=gg&&groups(val('activeMap')).includes(gg)?gg:'';
  const items=relevant();$('count').textContent=items.length+' places';
  $('cards').replaceChildren();if(!items.length)$('cards').append(Object.assign(document.createElement('p'),{textContent:'No places match your filters.'}));
@@ -338,7 +338,11 @@ function acceptTrackingFix(pos){
  userPosition=[pos.coords.latitude,pos.coords.longitude];
  if(map){
   if(locationMarker)locationMarker.setLatLng(userPosition);
-  else locationMarker=L.circleMarker(userPosition,{radius:9,color:'#fff',weight:3,fillColor:'#236bd5',fillOpacity:1,interactive:false}).addTo(map).bindTooltip('You are here');
+  else locationMarker=L.marker(userPosition,{interactive:false,zIndexOffset:1000,icon:L.divIcon({
+   className:'currentPositionIcon',
+   html:'<span class="currentPositionHalo"></span><span class="currentPositionArrow" aria-hidden="true">➤</span>',
+   iconSize:[44,44],iconAnchor:[22,22]
+  })}).addTo(map).bindTooltip('You are here');
   if(!locatedOnce){map.setView(userPosition,16);locatedOnce=true}
  }
  setTrackingStatus('GPS active · ±'+Math.round(pos.coords.accuracy)+' m');
