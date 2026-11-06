@@ -23,7 +23,7 @@ if(!configured){hide('setup',false);$('login').disabled=true}else{
  $('login').onclick=()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(err);
  $('logout').onclick=()=>signOut(auth).catch(err);
  onAuthStateChanged(auth,async u=>{
-  unsubscribe();unsubscribe=()=>{};if(!u)stopTracking();user=null;places=[];photoUrls.clear();
+  unsubscribe();unsubscribe=()=>{};stopTracking();user=null;places=[];photoUrls.clear();
   hide('login',!!u);hide('logout',!u);$('identity').textContent=u?.email||'';hide('dashboard',true);hide('denied',true);showMarkers();
   if(!u)return;
   try{
@@ -54,7 +54,27 @@ async function migrateLegacyMaps(docs){
  }finally{migrationBusy=false}
 }
 
-function initMap(){if(map){setTimeout(()=>map.invalidateSize(),80);return}map=L.map('map').setView([40.42,-3.7],5);locateUser(true);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);markers=L.layerGroup().addTo(map)}
+function initMap(){
+ if(map){setTimeout(()=>map.invalidateSize(),80);if(trackingWatch===null)startTracking();return}
+ map=L.map('map').setView([40.42,-3.7],5);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
+ markers=L.layerGroup().addTo(map);
+ const LocateControl=L.Control.extend({
+  options:{position:'bottomright'},
+  onAdd(){
+   const container=L.DomUtil.create('div','leaflet-bar leaflet-control myLocationControl');
+   const btn=L.DomUtil.create('button','myLocationControlButton',container);
+   btn.type='button';btn.title='Center on my location';btn.setAttribute('aria-label','Center on my location');
+   btn.textContent='⌖';
+   L.DomEvent.disableClickPropagation(container);
+   L.DomEvent.disableScrollPropagation(container);
+   L.DomEvent.on(btn,'click',event=>{L.DomEvent.stop(event);centerOnMyLocation()});
+   return container;
+  }
+ });
+ map.addControl(new LocateControl());
+ startTracking();
+}
 function categories(){return [...new Set(places.map(p=>p.map||p.category||'Default'))].sort()}
 function groups(cat){return [...new Set(places.filter(p=>!cat||(p.map||p.category||'Default')===cat).map(p=>p.group).filter(Boolean))].sort()}
 function refill(sel,options,label){const before=sel.value;sel.replaceChildren(new Option(label,''));options.forEach(s=>sel.add(new Option(s,s)));sel.value=options.includes(before)?before:''}
@@ -294,63 +314,58 @@ $('import').onclick=async()=>{if(!user||!pending.length)return;const overwrite=$
  }catch(x){err(x);$('importSummary').textContent='Imported '+count+' rows before error. Recheck before retrying.'}};
 
 
+function setTrackingStatus(message,isError=false){
+ const status=$('locationStatus');
+ status.textContent=message;status.classList.toggle('locationError',isError);
+}
+function centerOnMyLocation(){
+ if(userPosition&&latestTrackingFix&&Date.now()-latestTrackingFix.timestamp<=30000){
+  map?.setView(userPosition,Math.max(map.getZoom(),16),{animate:true});
+  return;
+ }
+ setTrackingStatus('Finding your current position…');
+ if(trackingWatch===null)startTracking();
+ if(!navigator.geolocation||!window.isSecureContext)return;
+ navigator.geolocation.getCurrentPosition(pos=>{
+  acceptTrackingFix(pos);
+  map?.setView(userPosition,Math.max(map.getZoom(),16),{animate:true});
+ },error=>setTrackingStatus('Unable to center map: '+error.message,true),
+ {enableHighAccuracy:true,timeout:15000,maximumAge:5000});
+}
+function acceptTrackingFix(pos){
+ if(!Number.isFinite(pos.coords.latitude)||!Number.isFinite(pos.coords.longitude))return;
+ latestTrackingFix=pos;
+ userPosition=[pos.coords.latitude,pos.coords.longitude];
+ if(map){
+  if(locationMarker)locationMarker.setLatLng(userPosition);
+  else locationMarker=L.circleMarker(userPosition,{radius:9,color:'#fff',weight:3,fillColor:'#236bd5',fillOpacity:1,interactive:false}).addTo(map).bindTooltip('You are here');
+  if(!locatedOnce){map.setView(userPosition,16);locatedOnce=true}
+ }
+ setTrackingStatus('GPS active · ±'+Math.round(pos.coords.accuracy)+' m');
+}
 function stopTracking(){
  if(trackingWatch!==null){navigator.geolocation?.clearWatch(trackingWatch);trackingWatch=null}
- latestTrackingFix=null;
- const button=$('tracking');button.setAttribute('aria-pressed','false');button.title='Start GPS tracking';button.textContent='◎';button.classList.remove('trackingActive');
+ latestTrackingFix=null;userPosition=null;
+ if(map&&locationMarker){map.removeLayer(locationMarker);locationMarker=null}
+ locatedOnce=false;
 }
 function startTracking(){
- if(!navigator.geolocation||!window.isSecureContext){$('locationStatus').textContent='GPS tracking requires HTTPS and location permission.';return}
- const button=$('tracking');
- button.title='Stop GPS tracking';button.textContent='●';button.setAttribute('aria-pressed','true');button.classList.add('trackingActive');
- $('locationStatus').textContent='Tracking GPS… Waiting for position.';
- trackingWatch=navigator.geolocation.watchPosition(pos=>{
-  latestTrackingFix=pos;
-  userPosition=[pos.coords.latitude,pos.coords.longitude];
-  if(map){
-   if(locationMarker)locationMarker.setLatLng(userPosition);
-   else locationMarker=L.circleMarker(userPosition,{radius:9,color:'#fff',weight:3,fillColor:'#236bd5',fillOpacity:1}).addTo(map).bindTooltip('You are here');
-  }
-  $('locationStatus').textContent='Tracking ON · GPS ±'+Math.round(pos.coords.accuracy)+' m';
- },e=>{$('locationStatus').textContent='Tracking stopped: '+(e.code===1?'Location permission denied.':e.message);stopTracking()},
- {enableHighAccuracy:true,maximumAge:0,timeout:25000});
-}
-$('tracking').onclick=()=>{if(trackingWatch!==null)stopTracking();else startTracking()};
-function recentTrackingFix(){return latestTrackingFix&&Date.now()-latestTrackingFix.timestamp<12000?latestTrackingFix:null}
-function locateUser(initial=false){
- const button=$('locate');
- const setStatus=(message,isError=false)=>{
-   $('locationStatus').textContent=message;
-   $('locationStatus').classList.toggle('locationError',isError);
- };
- if(!window.isSecureContext || !navigator.geolocation){
-   setStatus('Location is unavailable. Open My Places over HTTPS in a browser with location access.',true);
-   return;
+ if(trackingWatch!==null)return;
+ if(!window.isSecureContext||!navigator.geolocation){
+  setTrackingStatus('Location unavailable. Enable GPS and open My Places over HTTPS.',true);return
  }
- if(!initial)button.disabled=true;
- button.textContent='⌖';button.title='Locating…';
- setStatus('Finding your position…');
- navigator.geolocation.getCurrentPosition(pos=>{
-   userPosition=[pos.coords.latitude,pos.coords.longitude];
-   if(map){
-     if(locationMarker)locationMarker.setLatLng(userPosition);
-     else locationMarker=L.circleMarker(userPosition,{radius:9,color:'#fff',weight:3,fillColor:'#236bd5',fillOpacity:1}).addTo(map).bindTooltip('You are here');
-     map.invalidateSize();
-     map.setView(userPosition,16,{animate:true});
-   }
-   locatedOnce=true;
-   setStatus('Location found (±'+Math.round(pos.coords.accuracy)+' m).');
-   button.disabled=false;button.textContent='⌖';button.title='My location';
- },error=>{
-   let reason=error.code===1?'Location permission denied. Enable location permission for this site in browser settings.':
-     error.code===2?'Your phone could not determine its location. Check device location services.':
-     error.code===3?'Location request timed out. Tap My location to retry.':
-     'Unable to obtain location: '+error.message;
-   setStatus(reason,true);
-   button.disabled=false;button.textContent='⌖';button.title='Retry location';
- },{enableHighAccuracy:true,timeout:20000,maximumAge:15000});
+ setTrackingStatus('GPS active · Finding your position…');
+ // Browser position updates are event-driven; maximumAge allows readings up to five seconds old.
+ trackingWatch=navigator.geolocation.watchPosition(
+  acceptTrackingFix,
+  error=>{
+   setTrackingStatus(error.code===1?'Location permission denied. Allow location access in browser settings.':'GPS unavailable: '+error.message,true);
+   if(error.code===1)stopTracking();
+  },
+  {enableHighAccuracy:true,maximumAge:5000,timeout:20000}
+ );
 }
-$('locate').onclick=()=>locateUser(false);
+function recentTrackingFix(){return latestTrackingFix&&Date.now()-latestTrackingFix.timestamp<12000?latestTrackingFix:null}
 $('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains('hidden');hide('filters',!expanding);$('toggleFilters').setAttribute('aria-expanded',String(expanding));$('toggleFilters').innerHTML='⚙ <span class="compactLabel">Filters</span> <span id="filterCount"></span>';updateFilterBadge()};
 function updateFilterBadge(){const count=['search','filterGroup','filterRating','filterSize','filterVisibility'].filter(id=>val(id)).length;const badge=$('filterCount');if(badge)badge.textContent=count?'('+count+')':''}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',updateFilterBadge);
