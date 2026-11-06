@@ -230,3 +230,10 @@ header #identity{max-width:135px}
  header .compactToolbar .mapPicker:not(.hidden){min-width:56px;max-width:82px}
  header #logout{font-size:10px;padding:6px 4px}
 }
+
+/* Prominent Add action in the header, also labeled on small screens. */
+header .compactToolbar button.compactNew{background:#c65319;border-color:#c65319;color:#fff;font-weight:750;padding-inline:13px}
+header .compactToolbar button.compactNew:hover,header .compactToolbar button.compactNew:focus-visible{background:#a94212;border-color:#a94212;color:#fff}
+header .compactToolbar button.compactNew span{display:inline}
+@media(max-width:750px){header .compactToolbar button.compactNew{padding:5px 9px;font-size:13px}}
+@media(max-width:380px){header .compactToolbar button.compactNew{padding:5px 7px;font-size:12px}}
