@@ -195,3 +195,10 @@
 .currentPositionIcon{background:transparent;border:0}
 .currentPositionHalo{position:absolute;inset:3px;border-radius:50%;background:rgba(0,151,116,.14);border:1px solid rgba(0,151,116,.23)}
 .currentPositionArrow{position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;color:#009775;font-size:28px;font-weight:900;transform:rotate(-45deg);text-shadow:-2px -2px 0 white,2px -2px 0 white,-2px 2px 0 white,2px 2px 0 white,0 2px 5px #123c3890}
+
+/* Larger unmistakably colored live GPS arrow: SVG avoids black font glyph fallback. */
+#map .currentPositionIcon{width:60px!important;height:60px!important;background:transparent!important;border:0!important}
+#map .currentPositionHalo{position:absolute;inset:3px;border-radius:50%;background:rgba(4,184,158,.16);border:2px solid rgba(4,184,158,.55);box-shadow:0 0 0 5px rgba(4,184,158,.10)}
+#map svg.currentPositionArrow{position:absolute;left:6px;top:6px;width:48px;height:48px;inset:auto;display:block;transform:none;filter:drop-shadow(0 2px 3px rgba(5,75,68,.36));opacity:1}
+#map .leaflet-top .myLocationControl{margin:12px 12px 0 0}
+@media(max-width:600px){#map .leaflet-top .myLocationControl{margin:10px 10px 0 0}}
