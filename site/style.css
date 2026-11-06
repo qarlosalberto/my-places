@@ -237,3 +237,7 @@ header .compactToolbar button.compactNew:hover,header .compactToolbar button.com
 header .compactToolbar button.compactNew span{display:inline}
 @media(max-width:750px){header .compactToolbar button.compactNew{padding:5px 9px;font-size:13px}}
 @media(max-width:380px){header .compactToolbar button.compactNew{padding:5px 7px;font-size:12px}}
+
+/* Add is always visibly labeled on mobile, never reduced to a + icon. */
+header #new.compactNew{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:67px;white-space:nowrap;font-weight:750;background:#c65319;border-color:#c65319;color:#fff}
+@media(max-width:750px){header #new.compactNew{font-size:13px;min-width:64px;padding:5px 8px}}
