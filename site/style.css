@@ -159,3 +159,9 @@
 .trendChartLegend{font-size:12px;margin:9px 0;color:#526782}
 @media(max-width:920px){.trendLayout{grid-template-columns:1fr}.trendControls{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){.trendControls{gap:8px}.trendControls label{font-size:11px}#atlasTrendMap{height:53vh;min-height:340px}}
+
+/* Map-native recenter control: replaces two GPS buttons in the toolbar. */
+#map .myLocationControl{border:0;background:transparent;box-shadow:none;margin:0 12px 14px 0}
+#map .myLocationControlButton{display:flex;align-items:center;justify-content:center;width:44px;height:44px;min-width:44px;border:1px solid #dce5f4;border-radius:50%;padding:0;background:#fff;color:#236bd5;font-size:29px;line-height:1;box-shadow:0 3px 12px #132b4e26;cursor:pointer;touch-action:manipulation}
+#map .myLocationControlButton:hover,#map .myLocationControlButton:focus-visible{background:#eaf2ff}
+@media(max-width:600px){#map .myLocationControl{margin:0 10px 12px 0}}
