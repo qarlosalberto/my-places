@@ -768,7 +768,8 @@ async function loadVisibleBusEtas(){
 }
 function startServices(){
  if(!servicesMap){
-  servicesMap=L.map('servicesMap',{zoomControl:true}).setView([41.6488,-0.8891],13);
+  servicesMap=L.map('servicesMap',{zoomControl:false}).setView([41.6488,-0.8891],14);
+  L.control.zoom({position:'bottomright'}).addTo(servicesMap);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(servicesMap);
   servicesBiziLayer=L.layerGroup().addTo(servicesMap);
   servicesBusLayer=L.layerGroup().addTo(servicesMap);
