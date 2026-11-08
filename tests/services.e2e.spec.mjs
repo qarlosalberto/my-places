@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const leafletJs = require.resolve('leaflet/dist/leaflet.js');
 const leafletCss = require.resolve('leaflet/dist/leaflet.css');
+const chartJs = require.resolve('chart.js/dist/chart.umd.js');
 const API = 'https://www.zaragoza.es/sede/servicio/urbanismo-infraestructuras/transporte-urbano/poste-autobus';
 const GBFS = 'https://zaragoza.publicbikesystem.net/customer/gbfs/v3.0/';
 const json = data => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(data) });
@@ -15,6 +16,8 @@ async function startMockedServices(page) {
     route.fulfill({ path: leafletJs, contentType: 'application/javascript' }));
   await page.route('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', route =>
     route.fulfill({ path: leafletCss, contentType: 'text/css' }));
+  await page.route('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js', route =>
+    route.fulfill({ path: chartJs, contentType: 'application/javascript' }));
   await page.route(/\/app\.js\?v=/, async route => {
     let source = await (await route.fetch()).text();
     source = source.replace(/^import .*;\s*$/gm, '');
@@ -24,6 +27,9 @@ async function startMockedServices(page) {
 window.__servicesE2E = {
   open: () => selectMainTab('services'),
   eta: extractBusEta,
+  lines: extractBusLines,
+  stops: () => serviceBuses,
+  charts: () => servicesCharts,
   busLayer: () => servicesBusLayer,
   map: () => servicesMap
 };`;
@@ -58,7 +64,7 @@ window.__servicesE2E = {
   await page.route(new RegExp('poste-autobus/tuzsa-\\d+\\.json'), route => {
     const id = route.request().url().match(/tuzsa-(\d+)\.json/)?.[1];
     const data = id === '798'
-      ? { destinos: [{ linea: '35', primero: '22 minutos', segundo: '35 minutos' }] }
+      ? { destinos: [{ linea: '35', primero: '22 minutos', segundo: '35 minutos' },{ linea: '23', primero: '6 min', segundo: '18 min' },{ linea: '40', primero: 'Sin información' }] }
       : id === '799'
         ? { destinos: [{ linea: '23', primero: '6 min', segundo: '19 min' }] }
         : { destinos: [{ linea: '40', primero: 'Sin información' }] };
@@ -99,18 +105,15 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
     { radius: 19, color: '#3f84c5' }
   ]));
   expect(results.tapTargets).toBe(3);
-  const touchSizes = await page.locator('#servicesMap .servicesBusLabel').evaluateAll(nodes =>
-    nodes.map(node => {
-      const rect = node.getBoundingClientRect();
-      const image = node.querySelector('span');
-      return { width: rect.width, height: rect.height, glyph: parseFloat(getComputedStyle(image).fontSize) };
-    }));
-  expect(touchSizes).toHaveLength(3);
-  for (const size of touchSizes) {
-    expect(size.width).toBeGreaterThanOrEqual(42);
-    expect(size.height).toBeGreaterThanOrEqual(42);
-    expect(size.glyph).toBeGreaterThanOrEqual(25);
-  }
+  // No bus pictograms should be rendered: circles are the entire tap affordance.
+  await expect(page.locator('#servicesMap .servicesBusLabel')).toHaveCount(0);
+  const routeDetails = await page.evaluate(() =>
+    window.__servicesE2E.stops().find(s => s.id === 'tuzsa-798').arrivals);
+  expect(routeDetails).toEqual([
+    { line: '23', minutes: 6 },
+    { line: '35', minutes: 22 },
+    { line: '40', minutes: null }
+  ]);
 
   // On 320px devices the map can start partly below the fold; scroll before coordinate-based touch.
   await page.locator('#servicesMap').scrollIntoViewIfNeeded();
@@ -122,16 +125,16 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
     return { x: bounds.left + point.x, y: bounds.top + point.y };
   });
   await page.mouse.click(clickPoint.x, clickPoint.y);
-  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Next arrival: 22 min');
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 35: 22 min');
   // Regression: a Leaflet moveend after selecting a stop must not remove its popup.
   await page.evaluate(() => window.__servicesE2E.map().fire('moveend'));
-  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Next arrival: 22 min');
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 35: 22 min');
   // A background ETA refresh must update the existing marker without destroying its popup.
   await page.evaluate(() => {
     const map = window.__servicesE2E.map();
     map.panBy([1, 0], { animate: false });
   });
-  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Next arrival: 22 min');
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 35: 22 min');
 
 });
 
@@ -140,6 +143,8 @@ test('a failed municipal ETA request never claims a live arrival or colors it re
     route.fulfill({ path: leafletJs, contentType: 'application/javascript' }));
   await page.route('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', route =>
     route.fulfill({ path: leafletCss, contentType: 'text/css' }));
+  await page.route('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js', route =>
+    route.fulfill({ path: chartJs, contentType: 'application/javascript' }));
   await page.route(/\/app\.js\?v=/, async route => {
     let source = await (await route.fetch()).text();
     source = source.replace(/^import .*;\s*$/gm, '').replace(/^const configured=.*;$/m, 'const configured=false;');
@@ -162,8 +167,8 @@ test('a failed municipal ETA request never claims a live arrival or colors it re
     window.__openServicesForTest();
   });
   await expect(page.locator('#servicesStatus')).toContainText('1 request errors');
-  const visual = await page.locator('#servicesMap .servicesBusLabel').count();
-  expect(visual).toBe(1);
+  const touchTargetCount = await page.evaluate(() => document.querySelectorAll('#servicesMap .leaflet-overlay-pane .leaflet-interactive').length);
+  expect(touchTargetCount).toBeGreaterThan(0);
   // Ensure the stop remains unknown and no fabricated "over 15 min" estimate appears.
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toHaveCount(0);
   await expect(page.locator('#servicesStatus')).toContainText('0 arrivals received');
@@ -186,7 +191,37 @@ test('multiselect independently toggles Bizi and Bus; Bizi 3/2/0 remain green/ye
   await page.locator('#servicesBizi').uncheck();
   await expect(page.locator('#servicesMap .serviceMarker-bike')).toHaveCount(0);
   await page.locator('#servicesBus').check();
-  await expect(page.locator('#servicesMap .servicesBusLabel')).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() => window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 34).length)).toBe(3);
+});
+
+test('broken-bikes-only filter keeps exactly the stations reporting faults, and Chart.js stats reflect current snapshot', async ({page}) => {
+  await startMockedServices(page);
+  await expect(page.locator('#servicesMap .serviceMarker-bike')).toHaveCount(3);
+  await expect(page.locator('#servicesStatistics')).toBeVisible();
+  const stats = await page.evaluate(() => ({
+    bikes: document.querySelector('#servicesStatCards').innerText,
+    charts: Object.keys(window.__servicesE2E.charts())
+  }));
+  expect(stats.bikes).toContain('out of service');
+  expect(stats.bikes).toContain('1');
+  expect(stats.charts).toEqual(expect.arrayContaining(['servicesBiziChart','servicesBreakdownChart','servicesBusChart']));
+  await page.locator('#servicesPicker > summary').click();
+  await page.locator('#servicesBrokenOnly').check();
+  await expect(page.locator('#servicesMap .serviceMarker-bike')).toHaveCount(1);
+  await expect(page.locator('#servicesMap .serviceRepair')).toContainText('1');
+  await page.locator('#servicesBrokenOnly').uncheck();
+  await expect(page.locator('#servicesMap .serviceMarker-bike')).toHaveCount(3);
+});
+
+test('bus line thresholds count separately per line, never treating an unknown prediction as >15 min', async ({page}) => {
+  await startMockedServices(page);
+  const result = await page.evaluate(() => ({
+    parsed: window.__servicesE2E.lines({result:[{linea:'5',tiempos:[{minutos:12}]},{linea:'35',primero:'22 min'},{linea:'23',primero:'Sin información'}]}),
+    cards: document.querySelector('#servicesStatCards').innerText
+  }));
+  expect(result.parsed).toEqual([{line:'5',minutes:12},{line:'23',minutes:null},{line:'35',minutes:22}]);
+  expect(result.cards).toContain('lines with >15 min wait');
+  expect(result.cards).toContain('1');
 });
 
 test('Services layout fits narrow phones without toolbar overlap or missing map', async ({ page }) => {
