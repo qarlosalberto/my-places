@@ -21,6 +21,7 @@ PUBLIC_FILES = (
     "firebase-config-v2.js",
 )
 ELECTORAL_CSS_MARKER = "/* Public landing + separate atlas. Existing My Places styles remain unchanged. */"
+PUBLIC_CSS_RESUME_MARKER = "/* Map-native recenter control: replaces two GPS buttons in the toolbar. */"
 
 def build_public_site(destination: Path) -> None:
     target = destination.resolve()
@@ -37,7 +38,12 @@ def build_public_site(destination: Path) -> None:
 
     stylesheet = (target / "style.css").read_text(encoding="utf-8")
     if ELECTORAL_CSS_MARKER in stylesheet:
-        stylesheet = stylesheet.split(ELECTORAL_CSS_MARKER, 1)[0]
+        # Keep app styling written after the archived electoral-only section.
+        before, remainder = stylesheet.split(ELECTORAL_CSS_MARKER, 1)
+        if PUBLIC_CSS_RESUME_MARKER not in remainder:
+            raise ValueError("Falta el marcador de estilos de My Places")
+        public_tail = remainder.split(PUBLIC_CSS_RESUME_MARKER, 1)[1]
+        stylesheet = before + "\n" + PUBLIC_CSS_RESUME_MARKER + public_tail
         (target / "style.css").write_text(stylesheet, encoding="utf-8")
 
     html = (target / "index.html").read_text(encoding="utf-8")
