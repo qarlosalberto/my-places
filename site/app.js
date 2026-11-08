@@ -705,7 +705,7 @@ function busEta(record){
  if(typeof record!=='object')return null;
  // Do not interpret route numbers, stop IDs, timestamps or unrelated numeric fields as arrival times.
  for(const [key,value] of Object.entries(record)){
-  if(/^(minutos|minutes|tiempo|tiempoEspera|tiempoLlegada|tiempo_espera|espera|arrival_in_minutes|arrivalInMinutes|waitingTime|wait|prediction|timeLeft|remainingMinutes|proximo|proximaLlegada)$/i.test(key)){
+  if(/^(minutos|minutes|tiempo|tiempoEspera|tiempoLlegada|tiempo_espera|espera|arrival_in_minutes|arrivalInMinutes|waitingTime|wait|prediction|timeLeft|remainingMinutes|proximo|proximaLlegada|primero|segundo|primerBus|segundoBus)$/i.test(key)){
    const parsed=parseBusMinutes(value);if(parsed!==null)return parsed;
   }
  }
@@ -715,6 +715,7 @@ function parseBusMinutes(raw){
  if(typeof raw==='number')return Number.isFinite(raw)&&raw>=0&&raw<=180?raw:null;
  if(typeof raw!=='string')return null;
  const value=raw.trim();
+ if(/^(?:en la parada|llegando|inminente)$/i.test(value))return 0;
  if(/^\d{1,3}$/.test(value)){const minutes=Number(value);return minutes<=180?minutes:null}
  const match=value.match(/^(?:aprox\.?\s*)?(\d{1,3})\s*(?:min(?:utos|utes)?|m\b)/i);
  return match&&Number(match[1])<=180?Number(match[1]):null;
@@ -728,7 +729,7 @@ function extractBusEta(obj){
   const eta=busEta(value);if(eta!==null)found.push(eta);
   // Traverse response wrappers and lists; never infer times from arbitrary numbers.
   for(const [key,child] of Object.entries(value)){
-   if(child&&typeof child==='object'&&/^(result|results|data|datos|features|properties|lineas|lines|tiempos|tiemposEspera|llegadas|arrivals|estimaciones|predicciones|bus|buses|servicios|poste|posteAutobus|autobuses|resultado|respuesta)$/i.test(key))visit(child,depth+1);
+   if(child&&typeof child==='object'&&/^(result|results|data|datos|features|properties|lineas|lines|tiempos|tiemposEspera|llegadas|arrivals|destinos|estimaciones|predicciones|bus|buses|servicios|poste|posteAutobus|autobuses|resultado|respuesta)$/i.test(key))visit(child,depth+1);
   }
  };
  visit(obj);
@@ -756,10 +757,10 @@ function drawServicesBus(){
   const color=eta===null?'#3f84c5':eta>15?'#d94749':'#4274c7';
   // Large visible bus icon, plus an invisible ~44 px touch target for mobile.
   // Both remain in a low pane so Bizi stations are always in front.
-  const marker=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:eta===null?10:13,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?2.5:2,fillColor:color,fillOpacity:eta===null?.14:.94,interactive:false}).addTo(servicesBusLayer);
-  const label=L.marker(st.coords,{pane:'servicesBusPane',interactive:false,icon:L.divIcon({className:'servicesBusLabel',html:'<span aria-hidden="true">🚌</span>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(servicesBusLayer);
+  const marker=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:eta===null?15:18,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?2.5:2,fillColor:color,fillOpacity:eta===null?.14:.94,interactive:false}).addTo(servicesBusLayer);
+  const label=L.marker(st.coords,{pane:'servicesBusPane',interactive:false,icon:L.divIcon({className:'servicesBusLabel',html:'<span aria-hidden="true">🚌</span>',iconSize:[34,34],iconAnchor:[17,17]})}).addTo(servicesBusLayer);
   const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
-  const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:23,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
+  const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:28,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
   tap.bindPopup(servicePopup('🚌 '+st.name,lines)).addTo(servicesBusLayer);
  }
 }
