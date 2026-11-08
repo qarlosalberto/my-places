@@ -148,7 +148,6 @@ test('a failed municipal ETA request never claims a live arrival or colors it re
   await expect(page.locator('#servicesStatus')).toContainText('1 request errors');
   const visual = await page.locator('#servicesMap .servicesBusLabel').count();
   expect(visual).toBe(1);
-  const stroke = await page.locator('#servicesMap .leaflet-overlay-pane svg path[stroke]').first().getAttribute('stroke');
   // Ensure the stop remains unknown and no fabricated "over 15 min" estimate appears.
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toHaveCount(0);
   await expect(page.locator('#servicesStatus')).toContainText('0 arrivals received');
