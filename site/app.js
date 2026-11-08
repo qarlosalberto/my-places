@@ -819,14 +819,15 @@ function drawServicesBus(){
  const bounds=servicesMap?.getBounds(),detailZoom=servicesMap?.getZoom()>=14,active=new Set();
  for(const st of serviceBuses){
   if(!st.coords||!detailZoom||!bounds?.pad(.2).contains(st.coords))continue;
-  active.add(st.id);
   const arrivals=st.arrivals||[];
-  const known=arrivals.filter(a=>a.minutes!==null);
+  const known=arrivals.filter(a=>Number.isFinite(a.minutes)&&a.minutes>=0);
+  // Do not show stops without at least one confirmed next-arrival prediction.
+  if(!known.length)continue;
+  active.add(st.id);
   const longest=known.some(a=>a.minutes>15);
-  const eta=known.length?Math.min(...known.map(a=>a.minutes)):null;
   // Any line over 15 minutes makes this stop red; the popup details each line.
-  const color=!known.length?'#3f84c5':longest?'#d94749':'#4274c7';
-  const shape={radius:known.length?22:19,color:known.length?'#fff':'#3f84c5',weight:known.length?2.5:3,fillColor:color,fillOpacity:known.length?.94:.17};
+  const color=longest?'#d94749':'#4274c7';
+  const shape={radius:22,color:'#fff',weight:2.5,fillColor:color,fillOpacity:.94};
   const lines=arrivals.length?arrivals.map(a=>'Line '+a.line+': '+(a.minutes===null?'No prediction':a.minutes+' min'+(a.minutes>15?' · over 15 min':''))):['No line-level prediction available'];
   const signature=JSON.stringify([color,lines]);
   let entry=persistentBusMarkers.get(st.id);
@@ -843,7 +844,7 @@ function drawServicesBus(){
   }
  }
  for(const [id,entry] of persistentBusMarkers){
-  if(active.has(id)||entry.tap.isPopupOpen())continue;
+  if(active.has(id))continue;
   servicesBusLayer.removeLayer(entry.ring);servicesBusLayer.removeLayer(entry.tap);
   persistentBusMarkers.delete(id);
  }
