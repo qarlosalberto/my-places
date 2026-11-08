@@ -10,7 +10,7 @@ const API = 'https://www.zaragoza.es/sede/servicio/urbanismo-infraestructuras/tr
 const GBFS = 'https://zaragoza.publicbikesystem.net/customer/gbfs/v3.0/';
 const json = data => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(data) });
 
-async function startMockedServices(page) {
+async function startMockedServices(page, extraStops = []) {
   // Run the exact production markup, CSS, map code and UI handlers. Only Firebase
   // authentication and third-party responses are replaced in this test session.
   await page.route('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', route =>
@@ -60,7 +60,7 @@ window.__servicesE2E = {
     { id: 'tuzsa-798', title: 'Parada roja', geometry: { coordinates: [-0.8891, 41.6488] } },
     { id: 'tuzsa-799', title: 'Parada azul', geometry: { coordinates: [-0.8832, 41.6516] } },
     { id: 'tuzsa-800', title: 'Parada sin predicción', geometry: { coordinates: [-0.8955, 41.6507] } }
-  ];
+  ,...extraStops];
   await page.route(API + '.json?*', route => route.fulfill(json({ result: stops })));
   await page.route(new RegExp('poste-autobus/tuzsa-\\d+\\.json'), route => {
     const id = route.request().url().match(/tuzsa-(\d+)\.json/)?.[1];
@@ -68,7 +68,9 @@ window.__servicesE2E = {
       ? { destinos: [{ linea: '35', primero: '22 minutos', segundo: '35 minutos' },{ linea: '23', primero: '6 min', segundo: '18 min' },{ linea: '40', primero: 'Sin información' }] }
       : id === '799'
         ? { destinos: [{ linea: '23', primero: '6 min', segundo: '19 min' }] }
-        : { destinos: [{ linea: '40', primero: 'Sin información' }] };
+        : id === '800'
+          ? { destinos: [{ linea: '40', primero: 'Sin información' }] }
+          : { destinos: [{ linea: '41', primero: '5 min' }] };
     return route.fulfill(json(data));
   });
   await page.route('https://*.tile.openstreetmap.org/**', route => route.abort());
@@ -140,6 +142,21 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
   });
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 35: 22 min');
 
+});
+
+test('automatically requests all visible bus stops beyond the first 24 without panning', async ({ page }) => {
+  const extras = Array.from({length:28}, (_,i) => ({
+    id: 'tuzsa-'+(801+i), title: 'Extra '+i,
+    geometry: {coordinates: [-0.8891+(i%7)*.00035,41.6488+Math.floor(i/7)*.00035]}
+  }));
+  await startMockedServices(page, extras);
+  // No map movement here: the next visible batch must start by itself.
+  await expect.poll(() => page.evaluate(() =>
+    window.__servicesE2E.stops().filter(stop => stop.apiResult==='known').length
+  ), {timeout: 60000}).toBe(30);
+  await expect.poll(() => page.evaluate(() =>
+    window.__servicesE2E.busLayer().getLayers().filter(layer => layer.options?.radius===34).length
+  )).toBe(30);
 });
 
 test('bus stops with known ETAs remain visible at wider zoom levels 13 and 12', async ({ page }) => {
