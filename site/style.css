@@ -304,3 +304,14 @@ header #new.compactNew{display:inline-flex;align-items:center;justify-content:ce
 /* Bus stations: readable bus pictogram, with separate 46 px touch targets in JS. */
 #servicesMap .servicesBusLabel{display:flex;align-items:center;justify-content:center;background:transparent!important;border:0!important;pointer-events:none!important;filter:drop-shadow(0 1px 2px #ffffff)}
 #servicesMap .servicesBusLabel span{font-size:19px;line-height:1;pointer-events:none!important}
+
+/* Extra-small phones: reserve a separate account row instead of covering the Services tab. */
+@media(max-width:370px){
+ header:has(.headerToolbar){flex-wrap:wrap;align-items:center}
+ header .headerToolbar{order:0;flex:1 1 100%;width:100%}
+ header .compactToolbar .tabs{padding-right:0;min-width:0}
+ header .compactToolbar .tabs button{font-size:11px;padding:5px 7px}
+ header #account{position:static;order:1;margin-left:auto}
+ header #logout{max-width:none}
+}
+#servicesMap .servicesBusLabel span{font-size:24px;line-height:1}
