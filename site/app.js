@@ -858,7 +858,7 @@ async function loadServicesBuses(force=false){
   for(let start=0;start<4000;start+=500){
    const payload=await serviceJson(SERVICES_BUS+'.json?rows=500&start='+start+'&srsname=wgs84');
    const batch=serviceItems(payload);
-   for(const p of batch){const id=busId(p);const coords=serviceCoords(p);if(id&&coords&&!seen.has(id)){seen.add(id);all.push({id,coords,name:String(p.title??p.nombre??p.name??id),eta:null,arrivals:[],checked:0})}}
+   for(const p of batch){const id=busId(p);const coords=serviceCoords(p);if(id&&coords&&!seen.has(id)){seen.add(id);all.push({id,coords,name:String(p.title??p.nombre??p.name??id),eta:null,arrivals:[],checked:0,apiResult:'unqueried'})}}
    if(batch.length<500)break;
   }
   if(!all.length)throw Error('No bus stops found');
@@ -879,15 +879,15 @@ async function loadVisibleBusEtas(){
     const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');
     st.arrivals=extractBusLines(p);
     st.eta=extractBusEta(p);
-    if(st.arrivals.some(a=>a.minutes!==null))serviceBusSuccess++;else serviceBusNoPrediction++;
+    if(st.arrivals.some(a=>a.minutes!==null)){serviceBusSuccess++;st.apiResult='known'}else{serviceBusNoPrediction++;st.apiResult='unknown'}
    }catch(e){
-    st.eta=null;st.arrivals=[];serviceBusErrors++;
+    st.eta=null;st.arrivals=[];st.apiResult='error';serviceBusErrors++;
    }
   }
  }));
  serviceBusRequesting=false;
  const visibleStops=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&bounds.contains(st.coords));
- serviceBusStatus=serviceBuses.length+' stops · '+visibleStops.filter(st=>st.checked>0).length+'/'+visibleStops.length+' visible checked · '+serviceBusSuccess+' stops with ETA · '+serviceBusNoPrediction+' responses without ETA · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();renderServiceStatistics();serviceStatus();
+ serviceBusStatus=serviceBuses.length+' stops · '+visibleStops.filter(st=>st.checked>0).length+'/'+visibleStops.length+' visible checked · '+serviceBuses.filter(st=>st.apiResult==='known').length+' stops with ETA · '+serviceBuses.filter(st=>st.apiResult==='unknown').length+' responses without ETA · '+serviceBuses.filter(st=>st.apiResult==='error').length+' request errors'+(!serviceBuses.some(st=>st.apiResult==='known')?' · no confirmed live times yet':'');drawServicesBus();renderServiceStatistics();serviceStatus();
 }
 function startServices(){
  if(!servicesMap){
