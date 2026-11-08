@@ -669,9 +669,11 @@ async function loadServicesBizi(force=false){
   const statuses=new Map(serviceItems(status).map(item=>[String(item.station_id),item]));
   const stations=serviceItems(info).map(st=>{
    const a=statuses.get(String(st.station_id))||{};
-   const count=Number(a.num_bikes_available),docks=Number(a.num_docks_available),disabled=Number(a.num_bikes_disabled);
+   const bikeValue=a.num_vehicles_available??a.num_bikes_available;
+   const disabledValue=a.num_vehicles_disabled??a.num_bikes_disabled;
+   const count=Number(bikeValue),docks=Number(a.num_docks_available),disabled=Number(disabledValue);
    const name=typeof st.name==='string'?st.name:Array.isArray(st.name)?st.name.find(t=>t.language==='es')?.text||st.name[0]?.text||String(st.station_id):String(st.station_id);
-   return {name,coords:serviceCoords(st),available:a.num_bikes_available!=null&&Number.isFinite(count)?count:null,docks:a.num_docks_available!=null&&Number.isFinite(docks)?docks:null,disabled:a.num_bikes_disabled!=null&&Number.isFinite(disabled)?disabled:null,renting:a.is_renting!==false&&a.is_renting!==0};
+   return {name,coords:serviceCoords(st),available:bikeValue!=null&&Number.isFinite(count)?count:null,docks:a.num_docks_available!=null&&Number.isFinite(docks)?docks:null,disabled:disabledValue!=null&&Number.isFinite(disabled)?disabled:null,renting:a.is_renting!==false&&a.is_renting!==0};
   }).filter(st=>st.coords);
   if(!stations.length)throw Error('No station coordinates');
   serviceStations=stations;serviceBikeFetched=Date.now();serviceBikeStatus=stations.length+' stations · updated '+new Date().toLocaleTimeString();drawServicesBizi();
