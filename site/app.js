@@ -771,11 +771,11 @@ function extractBusLines(obj){
  const byLine=new Map();let unnamed=0;
  const isLineKey=/^(linea|línea|line|route|route_id|linea_id|lineNumber|numeroLinea|numLinea)$/i;
  const etaKey=/^(primero|segundo|primerBus|segundoBus|tiempo|tiempoEspera|tiempoLlegada|tiempo_espera|minutos|minutes|espera|arrival_in_minutes|arrivalInMinutes|waitingTime|wait|prediction|timeLeft|remainingMinutes|proximo|proximaLlegada)$/i;
- const walk=(value,depth=0,inGroup=false)=>{
+ const walk=(value,depth=0,inheritedLine='')=>{
   if(depth>8||value==null)return;
-  if(Array.isArray(value)){for(const x of value)walk(x,depth+1,inGroup);return}
+  if(Array.isArray(value)){for(const x of value)walk(x,depth+1,inheritedLine);return}
   if(typeof value!=='object')return;
-  let line='';
+  let line=inheritedLine;
   for(const [key,v] of Object.entries(value)){
    if(!isLineKey.test(key)||v===null||v===undefined)continue;
    if(typeof v==='string'||typeof v==='number')line=String(v).trim();
@@ -794,7 +794,7 @@ function extractBusLines(obj){
    else if(incoming!==null)byLine.set(normalized,Math.min(existing,incoming));
   }
   for(const [key,child] of Object.entries(value)){
-   if(child&&typeof child==='object'&&/^(result|results|data|datos|features|properties|lineas|lines|tiempos|tiemposEspera|llegadas|arrivals|destinos|estimaciones|predicciones|bus|buses|servicios|poste|posteAutobus|autobuses|resultado|respuesta)$/i.test(key))walk(child,depth+1,true);
+   if(child&&typeof child==='object'&&/^(result|results|data|datos|features|properties|lineas|lines|tiempos|tiemposEspera|llegadas|arrivals|destinos|estimaciones|predicciones|bus|buses|servicios|poste|posteAutobus|autobuses|resultado|respuesta)$/i.test(key))walk(child,depth+1,line);
   }
  };
  walk(obj);
