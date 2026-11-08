@@ -757,10 +757,10 @@ function drawServicesBus(){
   const color=eta===null?'#3f84c5':eta>15?'#d94749':'#4274c7';
   // Large visible bus icon, plus an invisible ~44 px touch target for mobile.
   // Both remain in a low pane so Bizi stations are always in front.
-  const marker=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:eta===null?15:18,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?2.5:2,fillColor:color,fillOpacity:eta===null?.14:.94,interactive:false}).addTo(servicesBusLayer);
-  const label=L.marker(st.coords,{pane:'servicesBusPane',interactive:false,icon:L.divIcon({className:'servicesBusLabel',html:'<span aria-hidden="true">🚌</span>',iconSize:[34,34],iconAnchor:[17,17]})}).addTo(servicesBusLayer);
+  const marker=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:eta===null?19:22,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?3:2.5,fillColor:color,fillOpacity:eta===null?.17:.94,interactive:false}).addTo(servicesBusLayer);
+  const label=L.marker(st.coords,{pane:'servicesBusPane',interactive:false,icon:L.divIcon({className:'servicesBusLabel',html:'<span aria-hidden="true">🚌</span>',iconSize:[42,42],iconAnchor:[21,21]})}).addTo(servicesBusLayer);
   const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
-  const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:28,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
+  const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:34,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
   tap.bindPopup(servicePopup('🚌 '+st.name,lines)).addTo(servicesBusLayer);
  }
 }
