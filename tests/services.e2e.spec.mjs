@@ -123,6 +123,16 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
   });
   await page.mouse.click(clickPoint.x, clickPoint.y);
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Next arrival: 22 min');
+  // Regression: a Leaflet moveend after selecting a stop must not remove its popup.
+  await page.evaluate(() => window.__servicesE2E.map().fire('moveend'));
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Next arrival: 22 min');
+  // A background ETA refresh must update the existing marker without destroying its popup.
+  await page.evaluate(() => {
+    const map = window.__servicesE2E.map();
+    map.panBy([1, 0], { animate: false });
+  });
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Next arrival: 22 min');
+
 });
 
 test('a failed municipal ETA request never claims a live arrival or colors it red', async ({ page }) => {
