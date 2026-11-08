@@ -633,7 +633,7 @@ async function serviceJson(url){
 function serviceIcon(label,color,kind,disabled){
  const safe=String(label).replace(/[^0-9A-Za-z+–?]/g,'').slice(0,5);
  const repair=Number.isFinite(disabled)&&disabled>0?'<span class="serviceRepair" aria-label="'+disabled+' bikes out of service">🛠 '+disabled+'</span>':'';
- return L.divIcon({className:'serviceMarker',html:'<span class="servicePin '+kind+'" style="--pin-color:'+color+'">'+safe+'</span>'+repair,iconSize:[35,35],iconAnchor:[17,17]});
+ return L.divIcon({className:'serviceMarker serviceMarker-'+kind,html:'<span class="servicePin '+kind+'" style="--pin-color:'+color+';background-color:'+color+';display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:2px solid white;border-radius:'+(kind==='bike'?'11px':'50%')+';color:white;font-weight:800;font-size:15px;box-shadow:0 2px 7px #18355966">'+safe+'</span>'+repair,iconSize:[42,42],iconAnchor:[21,21]});
 }
 function servicePopup(title,lines){
  const box=document.createElement('div'),head=document.createElement('strong');head.textContent=title;box.append(head);
@@ -647,7 +647,7 @@ function drawServicesBizi(){
   if(!st.coords)continue;
   const n=st.available,disabled=st.disabled;
   const color=!st.renting?'#89929f':n===null?'#89929f':n===0?'#d94749':n<=2?'#e9a52f':'#18875b';
-  const marker=L.marker(st.coords,{icon:serviceIcon(n===null?'?':String(n),color,'bike',disabled),keyboard:true});
+  const marker=L.marker(st.coords,{icon:serviceIcon(n===null?'?':String(n),color,'bike',disabled),keyboard:true,zIndexOffset:750});
   const lines=['Bikes available: '+(n===null?'Unknown':n),'Free docks: '+(st.docks??'Unknown')];
   if(disabled!==null)lines.push('🛠 Out of service: '+disabled);
   if(!st.renting)lines.push('Station not accepting rentals');
@@ -725,10 +725,13 @@ function drawServicesBus(){
  const bounds=servicesMap?.getBounds(),detailZoom=servicesMap?.getZoom()>=14;
  for(const st of serviceBuses){
   if(!st.coords)continue;
+  // At wider zoom levels, individual bus stop markers would obscure the Bizi stations.
+  if(!detailZoom)continue;
   const inView=bounds?.pad(.2).contains(st.coords);
+  if(!inView)continue;
   const eta=detailZoom&&inView?st.eta:null;
   const color=eta===null?'#89929f':eta>15?'#d94749':'#4274c7';
-  const marker=L.circleMarker(st.coords,{radius:detailZoom?8:5,color:'#ffffff',weight:1.5,fillColor:color,fillOpacity:.93});
+  const marker=L.circleMarker(st.coords,{radius:eta===null?3.5:8,color:eta===null?'#a3b5c6':'#ffffff',weight:eta===null?0.8:1.5,fillColor:eta===null?'#a3b5c6':color,fillOpacity:eta===null?.35:.93});
   const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
   if(!detailZoom)lines.push('Zoom in to load arrival predictions');
   marker.bindPopup(servicePopup('🚌 '+st.name,lines)).addTo(servicesBusLayer);
