@@ -732,7 +732,7 @@ function drawServicesBus(){
   const eta=detailZoom&&inView?st.eta:null;
   const color=eta===null?'#3f84c5':eta>15?'#d94749':'#4274c7';
   // Unknown arrivals are blue outline rings, never solid grey circles that obscure Bizi.
-  const marker=L.circleMarker(st.coords,{radius:eta===null?3.2:8,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?1.5:1.5,fillColor:color,fillOpacity:eta===null?0:.93});
+  const marker=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:eta===null?2.8:7,color:eta===null?'#4887bd':'#ffffff',weight:eta===null?1.4:1.5,fillColor:color,fillOpacity:eta===null?0:.93});
   const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
   if(!detailZoom)lines.push('Zoom in to load arrival predictions');
   marker.bindPopup(servicePopup('🚌 '+st.name,lines)).addTo(servicesBusLayer);
@@ -777,6 +777,8 @@ function startServices(){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(servicesMap);
   servicesBiziLayer=L.layerGroup().addTo(servicesMap);
   servicesBusLayer=L.layerGroup().addTo(servicesMap);
+  servicesMap.createPane('servicesBusPane');
+  servicesMap.getPane('servicesBusPane').style.zIndex='390';
   servicesMap.on('moveend',()=>{drawServicesBus();loadVisibleBusEtas()});
  }
  if(!servicesStarted){servicesStarted=true;refreshServices(false)}
