@@ -71,6 +71,9 @@ window.__servicesE2E = {
   await page.evaluate(() => {
     document.getElementById('dashboard').classList.remove('hidden');
     document.getElementById('headerToolbar').classList.remove('hidden');
+    // Reproduce the authorized-user toolbar (Sign out, not the wide Google login button).
+    document.getElementById('login').classList.add('hidden');
+    document.getElementById('logout').classList.remove('hidden');
     window.__servicesE2E.open();
   });
   await expect(page.locator('#servicesMap.leaflet-container')).toBeVisible();
