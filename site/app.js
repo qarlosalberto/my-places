@@ -630,9 +630,10 @@ async function serviceJson(url){
   return await response.json();
  }finally{clearTimeout(timeout)}
 }
-function serviceIcon(label,color,kind){
- const safe=String(label).replace(/[^0-9A-Za-z+–]/g,'').slice(0,5);
- return L.divIcon({className:'serviceMarker',html:'<span class="servicePin '+kind+'" style="--pin-color:'+color+'">'+safe+'</span>',iconSize:[35,35],iconAnchor:[17,17]});
+function serviceIcon(label,color,kind,disabled){
+ const safe=String(label).replace(/[^0-9A-Za-z+–?]/g,'').slice(0,5);
+ const repair=Number.isFinite(disabled)&&disabled>0?'<span class="serviceRepair" aria-label="'+disabled+' bikes out of service">🛠 '+disabled+'</span>':'';
+ return L.divIcon({className:'serviceMarker',html:'<span class="servicePin '+kind+'" style="--pin-color:'+color+'">'+safe+'</span>'+repair,iconSize:[35,35],iconAnchor:[17,17]});
 }
 function servicePopup(title,lines){
  const box=document.createElement('div'),head=document.createElement('strong');head.textContent=title;box.append(head);
@@ -646,7 +647,7 @@ function drawServicesBizi(){
   if(!st.coords)continue;
   const n=st.available,disabled=st.disabled;
   const color=!st.renting?'#89929f':n===null?'#89929f':n===0?'#d94749':n<=2?'#e9a52f':'#18875b';
-  const marker=L.marker(st.coords,{icon:serviceIcon(n===null?'?':String(n),color,'bike'),keyboard:true});
+  const marker=L.marker(st.coords,{icon:serviceIcon(n===null?'?':String(n),color,'bike',disabled),keyboard:true});
   const lines=['Bikes available: '+(n===null?'Unknown':n),'Free docks: '+(st.docks??'Unknown')];
   if(disabled!==null)lines.push('🛠 Out of service: '+disabled);
   if(!st.renting)lines.push('Station not accepting rentals');
