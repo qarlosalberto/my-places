@@ -87,7 +87,7 @@ function relevant(){const q=val('search').toLowerCase();return places.filter(p=>
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',render);
 function placeFacts(p){const wrap=document.createElement('div');wrap.className='placeFacts';for(const [icon,label,value] of [['★','Rating',p.rating||'Good'],['↔','Size',p.size||"Doesn't matter"],['👁','Visibility',p.visibility||'Not sure']]){const item=document.createElement('span');item.className='placeFact';item.title=label;const symbol=document.createElement('span');symbol.className='factIcon';symbol.textContent=icon;symbol.setAttribute('aria-hidden','true');item.append(symbol,document.createTextNode(label+': '+value));wrap.append(item)}return wrap}
 function render(){
- const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');hide('mapPicker',available.length<=1);if(available.includes(pendingMapSelection))pendingMapSelection='';
+ const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');hide('mapPicker',!$('servicesPanel').classList.contains('hidden')||available.length<=1);if(available.includes(pendingMapSelection))pendingMapSelection='';
  const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('activeMap')),'All groups');$('filterGroup').value=gg&&groups(val('activeMap')).includes(gg)?gg:'';
  const items=relevant();$('count').textContent=items.length+' places';
  $('cards').replaceChildren();if(!items.length)$('cards').append(Object.assign(document.createElement('p'),{textContent:'No places match your filters.'}));
@@ -114,8 +114,21 @@ function render(){
  if(coords.length&&!(val('search')||val('filterGroup')||val('filterRating')||val('filterSize')||val('filterVisibility'))){map.fitBounds(coords,{padding:[35,35],maxZoom:13})}
  else if(coords.length)map.fitBounds(coords,{padding:[35,35],maxZoom:14})
 }
-$('mapTab').onclick=()=>{hide('mapPanel',false);hide('listPanel',true);$('mapTab').classList.add('active');$('listTab').classList.remove('active');setTimeout(()=>map?.invalidateSize(),70)};
-$('listTab').onclick=()=>{hide('mapPanel',true);hide('listPanel',false);$('listTab').classList.add('active');$('mapTab').classList.remove('active')};
+let servicesMap=null,servicesBiziLayer=null,servicesBusLayer=null,servicesStarted=false;
+function selectMainTab(tab){
+ const service=tab==='services';
+ hide('servicesPanel',!service);hide('mapPanel',tab!=='map');hide('listPanel',tab!=='list');
+ for(const name of ['map','list','services'])$(name+'Tab').classList.toggle('active',name===tab);
+ hide('filters',service||$('toggleFilters').getAttribute('aria-expanded')!=='true');
+ hide('toggleFilters',service);hide('new',service);
+ hide('mapPicker',service||categories().length<=1);hide('count',service);hide('locationStatus',service);
+ const csv=document.querySelector('#dashboard > .csv');if(csv)csv.classList.toggle('hidden',service);
+ if(service){startServices();setTimeout(()=>servicesMap?.invalidateSize(),90)}
+ else if(tab==='map')setTimeout(()=>map?.invalidateSize(),90);
+}
+$('mapTab').onclick=()=>selectMainTab('map');
+$('listTab').onclick=()=>selectMainTab('list');
+$('servicesTab').onclick=()=>selectMainTab('services');
 const NEW_ENTRY='__myplaces_create_new__';
 function makeSelect(id,options,placeholder,choice='',newOption=''){
  const sel=$(id);sel.replaceChildren(new Option(placeholder,''));
@@ -581,3 +594,182 @@ async function exportFilteredPdf(){
  finally{button.disabled=false;button.textContent='⬇ Export PDF'}
 }
 $('exportPdf').onclick=exportFilteredPdf;
+
+/* Zaragoza Services: independent Leaflet map and layers. Never save municipal data as personal places. */
+const SERVICES_BUS='https://www.zaragoza.es/sede/servicio/urbanismo-infraestructuras/transporte-urbano/poste-autobus';
+const SERVICES_GBFS='https://zaragoza.publicbikesystem.net/customer/gbfs/v3.0/gbfs.json';
+let serviceStations=[],serviceBuses=[],serviceBikeFetched=0,serviceBusFetched=0,serviceRun=0,serviceBusRequesting=false;
+let serviceBikeStatus='Not loaded',serviceBusStatus='Not loaded',serviceRefreshTimer=null;
+const servicesEnabled=kind=>$(kind==='bus'?'servicesBus':'servicesBizi').checked;
+function serviceStatus(){
+ $('servicesStatus').textContent=[servicesEnabled('bizi')?'Bizi: '+serviceBikeStatus:null,servicesEnabled('bus')?'Bus: '+serviceBusStatus:null].filter(Boolean).join(' · ')||'Choose Bus and/or Bizi above.';
+}
+function serviceCoords(obj){
+ const g=obj.geometry||obj.location||obj.position;
+ const coords=g?.coordinates||g?.geometry?.coordinates;
+ if(Array.isArray(coords)&&coords.length>=2){
+  const a=Number(coords[0]),b=Number(coords[1]);
+  if(Math.abs(a)<=180&&Math.abs(b)<=90&&a>0&&b<0)return [a,b];
+  if(Math.abs(a)<=180&&Math.abs(b)<=90)return [b,a];
+ }
+ const lat=Number(obj.lat??obj.latitude??g?.lat),lon=Number(obj.lon??obj.lng??obj.longitude??g?.lon);
+ return Number.isFinite(lat)&&Number.isFinite(lon)?[lat,lon]:null;
+}
+function serviceItems(data){
+ if(Array.isArray(data))return data;
+ for(const item of [data?.result,data?.results,data?.features,data?.data?.stations,data?.data?.items,data?.data?.results,data?.data?.features,data?.stations]){
+  if(Array.isArray(item))return item;
+ }
+ return [];
+}
+async function serviceJson(url){
+ const c=new AbortController(),timeout=setTimeout(()=>c.abort(),12000);
+ try{
+  const response=await fetch(url,{headers:{Accept:'application/json'},signal:c.signal,cache:'no-store'});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  return await response.json();
+ }finally{clearTimeout(timeout)}
+}
+function serviceIcon(label,color,kind){
+ const safe=String(label).replace(/[^0-9A-Za-z+–]/g,'').slice(0,5);
+ return L.divIcon({className:'serviceMarker',html:'<span class="servicePin '+kind+'" style="--pin-color:'+color+'">'+safe+'</span>',iconSize:[35,35],iconAnchor:[17,17]});
+}
+function servicePopup(title,lines){
+ const box=document.createElement('div'),head=document.createElement('strong');head.textContent=title;box.append(head);
+ for(const line of lines){const p=document.createElement('div');p.textContent=line;p.style.marginTop='5px';box.append(p)}
+ return box;
+}
+function drawServicesBizi(){
+ if(!servicesBiziLayer)return;servicesBiziLayer.clearLayers();
+ if(!servicesEnabled('bizi'))return;
+ for(const st of serviceStations){
+  if(!st.coords)continue;
+  const n=st.available,disabled=st.disabled;
+  const color=!st.renting?'#89929f':n===null?'#89929f':n===0?'#d94749':n<=2?'#e9a52f':'#18875b';
+  const marker=L.marker(st.coords,{icon:serviceIcon(n===null?'?':String(n),color,'bike'),keyboard:true});
+  const lines=['Bikes available: '+(n===null?'Unknown':n),'Free docks: '+(st.docks??'Unknown')];
+  if(disabled!==null)lines.push('🛠 Out of service: '+disabled);
+  if(!st.renting)lines.push('Station not accepting rentals');
+  marker.bindPopup(servicePopup('🚲 '+st.name,lines));
+  marker.addTo(servicesBiziLayer);
+ }
+}
+async function loadServicesBizi(force=false){
+ if(!servicesEnabled('bizi'))return;
+ if(!force&&serviceStations.length&&Date.now()-serviceBikeFetched<60000){drawServicesBizi();return}
+ const run=++serviceRun;serviceBikeStatus='Loading…';serviceStatus();
+ try{
+  const feed=await serviceJson(SERVICES_GBFS);
+  const feeds=feed.data?.feeds||Object.values(feed.data||{}).find(v=>v&&Array.isArray(v.feeds))?.feeds||[];
+  const infoUrl=feeds.find(f=>f.name==='station_information')?.url;
+  const statusUrl=feeds.find(f=>f.name==='station_status')?.url;
+  if(!infoUrl||!statusUrl)throw Error('Station feeds unavailable');
+  const [info,status]=await Promise.all([serviceJson(infoUrl),serviceJson(statusUrl)]);
+  const statuses=new Map(serviceItems(status).map(item=>[String(item.station_id),item]));
+  const stations=serviceItems(info).map(st=>{
+   const a=statuses.get(String(st.station_id))||{};
+   const count=Number(a.num_bikes_available),docks=Number(a.num_docks_available),disabled=Number(a.num_bikes_disabled);
+   const name=typeof st.name==='string'?st.name:Array.isArray(st.name)?st.name.find(t=>t.language==='es')?.text||st.name[0]?.text||String(st.station_id):String(st.station_id);
+   return {name,coords:serviceCoords(st),available:a.num_bikes_available!=null&&Number.isFinite(count)?count:null,docks:a.num_docks_available!=null&&Number.isFinite(docks)?docks:null,disabled:a.num_bikes_disabled!=null&&Number.isFinite(disabled)?disabled:null,renting:a.is_renting!==false&&a.is_renting!==0};
+  }).filter(st=>st.coords);
+  if(!stations.length)throw Error('No station coordinates');
+  serviceStations=stations;serviceBikeFetched=Date.now();serviceBikeStatus=stations.length+' stations · updated '+new Date().toLocaleTimeString();drawServicesBizi();
+ }catch(e){serviceBikeStatus='Unavailable ('+e.message+')';servicesBiziLayer?.clearLayers();serviceStations=[]}
+ serviceStatus();
+}
+function busArrivalRows(obj){
+ const candidates=[obj?.tiempos,obj?.tiempoEspera,obj?.tiemposEspera,obj?.arrivals,obj?.llegadas,obj?.estimaciones,obj?.lineas,obj?.lines,obj?.datos?.tiempos,obj?.data?.arrivals];
+ let rows=candidates.find(Array.isArray)||[];
+ if(!rows.length){for(const value of Object.values(obj||{})){if(Array.isArray(value)&&value.some(i=>typeof i==='object')){rows=value;break}}}
+ return rows;
+}
+function busEta(record){
+ const raw=record?.minutos??record?.minutes??record?.tiempo??record?.tiempoEspera??record?.espera??record?.arrival_in_minutes??record?.prediction;
+ if(typeof raw==='number'&&Number.isFinite(raw))return raw>=0?raw:null;
+ if(typeof raw==='string'){const match=raw.match(/(\d{1,3})\s*(min|m\b)/i);if(match)return Number(match[1]);if(/^\d{1,3}$/.test(raw.trim()))return Number(raw.trim())}
+ return null;
+}
+function extractBusEta(obj){
+ const rows=busArrivalRows(obj);let values=rows.map(busEta).filter(n=>n!==null);
+ if(!values.length){const n=busEta(obj);if(n!==null)values=[n]}
+ return values.length?Math.min(...values):null;
+}
+function busId(obj){
+ const id=String(obj.id??obj.identifier??obj.codigo??obj.code??'');
+ return id.includes('tuzsa-')||id.includes('rural-')?id:(id?'tuzsa-'+id:'');
+}
+function drawServicesBus(){
+ if(!servicesBusLayer)return;servicesBusLayer.clearLayers();
+ if(!servicesEnabled('bus'))return;
+ const bounds=servicesMap?.getBounds(),detailZoom=servicesMap?.getZoom()>=14;
+ for(const st of serviceBuses){
+  if(!st.coords)continue;
+  const inView=bounds?.pad(.2).contains(st.coords);
+  const eta=detailZoom&&inView?st.eta:null;
+  const color=eta===null?'#89929f':eta>15?'#d94749':'#4274c7';
+  const marker=L.circleMarker(st.coords,{radius:detailZoom?8:5,color:'#ffffff',weight:1.5,fillColor:color,fillOpacity:.93});
+  const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
+  if(!detailZoom)lines.push('Zoom in to load arrival predictions');
+  marker.bindPopup(servicePopup('🚌 '+st.name,lines)).addTo(servicesBusLayer);
+ }
+}
+async function loadServicesBuses(force=false){
+ if(!servicesEnabled('bus'))return;
+ if(!force&&serviceBuses.length&&Date.now()-serviceBusFetched<3600000){drawServicesBus();loadVisibleBusEtas();return}
+ serviceBusStatus='Loading stops…';serviceStatus();
+ try{
+  const all=[],seen=new Set();
+  for(let start=0;start<4000;start+=500){
+   const payload=await serviceJson(SERVICES_BUS+'.json?rows=500&start='+start+'&srsname=wgs84');
+   const batch=serviceItems(payload);
+   for(const p of batch){const id=busId(p);const coords=serviceCoords(p);if(id&&coords&&!seen.has(id)){seen.add(id);all.push({id,coords,name:String(p.title??p.nombre??p.name??id),eta:null,checked:0})}}
+   if(batch.length<500)break;
+  }
+  if(!all.length)throw Error('No bus stops found');
+  serviceBuses=all;serviceBusFetched=Date.now();serviceBusStatus=all.length+' stops · zoom in for arrivals';drawServicesBus();loadVisibleBusEtas();
+ }catch(e){serviceBusStatus='Unavailable ('+e.message+')';serviceBuses=[];servicesBusLayer?.clearLayers()}
+ serviceStatus();
+}
+async function loadVisibleBusEtas(){
+ if(!servicesMap||!servicesEnabled('bus')||servicesMap.getZoom()<14||serviceBusRequesting||!serviceBuses.length)return;
+ const now=Date.now(),bounds=servicesMap.getBounds().pad(.12);
+ const targets=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&bounds.contains(st.coords)&&now-st.checked>60000).slice(0,24);
+ if(!targets.length)return;
+ serviceBusRequesting=true;serviceBusStatus='Checking arrivals for '+targets.length+' nearby stops…';serviceStatus();
+ await Promise.all(Array.from({length:4},async(_,worker)=>{
+  for(let i=worker;i<targets.length;i+=4){
+   const st=targets[i];st.checked=Date.now();
+   try{const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');st.eta=extractBusEta(p)}catch(e){st.eta=null}
+  }
+ }));
+ serviceBusRequesting=false;
+ serviceBusStatus=serviceBuses.length+' stops · checked '+targets.length+' nearby';drawServicesBus();serviceStatus();
+}
+function startServices(){
+ if(!servicesMap){
+  servicesMap=L.map('servicesMap',{zoomControl:true}).setView([41.6488,-0.8891],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(servicesMap);
+  servicesBiziLayer=L.layerGroup().addTo(servicesMap);
+  servicesBusLayer=L.layerGroup().addTo(servicesMap);
+  servicesMap.on('moveend',()=>{drawServicesBus();loadVisibleBusEtas()});
+ }
+ if(!servicesStarted){servicesStarted=true;refreshServices(false)}
+ serviceStatus();
+}
+function refreshServices(force){
+ if(servicesEnabled('bizi'))loadServicesBizi(force);else servicesBiziLayer?.clearLayers();
+ if(servicesEnabled('bus'))loadServicesBuses(force);else servicesBusLayer?.clearLayers();
+ serviceStatus();
+}
+function syncServiceSelection(){
+ const selected=[servicesEnabled('bus')?'Bus':null,servicesEnabled('bizi')?'Bizi':null].filter(Boolean);
+ $('servicesSelection').textContent=selected.join(' + ')||'None';
+ if(servicesMap)refreshServices(false);
+ serviceStatus();
+}
+$('servicesBus').addEventListener('change',syncServiceSelection);
+$('servicesBizi').addEventListener('change',syncServiceSelection);
+$('servicesRefresh').addEventListener('click',()=>refreshServices(true));
+document.addEventListener('click',event=>{const picker=$('servicesPicker');if(picker?.open&&!picker.contains(event.target))picker.open=false});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('servicesPanel').classList.contains('hidden'))refreshServices(false)});
+serviceRefreshTimer=setInterval(()=>{if(!$('servicesPanel').classList.contains('hidden')&&!document.hidden)refreshServices(false)},60000);
