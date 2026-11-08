@@ -722,7 +722,7 @@ async function loadServicesBizi(force=false){
    return {name,coords:serviceCoords(st),available:bikeValue!=null&&Number.isFinite(count)?count:null,docks:a.num_docks_available!=null&&Number.isFinite(docks)?docks:null,disabled:disabledValue!=null&&Number.isFinite(disabled)?disabled:null,renting:a.is_renting!==false&&a.is_renting!==0};
   }).filter(st=>st.coords);
   if(!stations.length)throw Error('No station coordinates');
-  serviceStations=stations;serviceBikeFetched=Date.now();serviceBikeStatus=stations.length+' stations · updated '+new Date().toLocaleTimeString();drawServicesBizi();renderServiceStatistics();
+  serviceStations=stations;serviceBikeFetched=Date.now();serviceBikeStatus=stations.length+' stations · updated '+new Date().toLocaleTimeString();drawServicesBizi();renderServiceStatistics();renderServiceStatistics();
  }catch(e){
   // The GBFS provider can restrict direct browser access. Fall back to Zaragoza's public station API.
   try{
@@ -739,7 +739,7 @@ async function loadServicesBizi(force=false){
     if(batch.length<500)break;
    }
    if(!found.length)throw Error('No stations from municipal API');
-   serviceStations=found;serviceBikeFetched=Date.now();serviceBikeStatus=found.length+' stations · municipal API (breakdowns unavailable)';drawServicesBizi();renderServiceStatistics();
+   serviceStations=found;serviceBikeFetched=Date.now();serviceBikeStatus=found.length+' stations · municipal API (breakdowns unavailable)';drawServicesBizi();renderServiceStatistics();renderServiceStatistics();
   }catch(fallbackError){serviceBikeStatus='Unavailable ('+fallbackError.message+')';servicesBiziLayer?.clearLayers();serviceStations=[]}
  }
  renderServiceStatistics();serviceStatus();
@@ -861,7 +861,7 @@ async function loadServicesBuses(force=false){
    if(batch.length<500)break;
   }
   if(!all.length)throw Error('No bus stops found');
-  serviceBuses=all;serviceBusFetched=Date.now();serviceBusStatus=all.length+' stops · zoom in for arrivals';drawServicesBus();loadVisibleBusEtas();
+  serviceBuses=all;serviceBusFetched=Date.now();serviceBusStatus=all.length+' stops · zoom in for arrivals';drawServicesBus();renderServiceStatistics();loadVisibleBusEtas();
  }catch(e){serviceBusStatus='Unavailable ('+e.message+')';serviceBuses=[];clearBusMarkers()}
  serviceStatus();
 }
@@ -904,7 +904,7 @@ function startServices(){
 function refreshServices(force){
  if(servicesEnabled('bizi'))loadServicesBizi(force);else servicesBiziLayer?.clearLayers();
  if(servicesEnabled('bus'))loadServicesBuses(force);else clearBusMarkers();
- serviceStatus();
+ renderServiceStatistics();serviceStatus();
 }
 function syncServiceSelection(){
  const selected=[servicesEnabled('bus')?'Bus':null,servicesEnabled('bizi')?'Bizi':null].filter(Boolean);
@@ -914,6 +914,7 @@ function syncServiceSelection(){
 }
 $('servicesBus').addEventListener('change',syncServiceSelection);
 $('servicesBizi').addEventListener('change',syncServiceSelection);
+$('servicesBrokenOnly').addEventListener('change',()=>{if(!$('servicesBizi').checked){$('servicesBizi').checked=true;syncServiceSelection()}else drawServicesBizi()});
 $('servicesRefresh').addEventListener('click',()=>refreshServices(true));
 document.addEventListener('click',event=>{const picker=$('servicesPicker');if(picker?.open&&!picker.contains(event.target))picker.open=false});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('servicesPanel').classList.contains('hidden'))refreshServices(false)});
