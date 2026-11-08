@@ -715,8 +715,8 @@ function parseBusMinutes(raw){
  if(typeof raw==='number')return Number.isFinite(raw)&&raw>=0&&raw<=180?raw:null;
  if(typeof raw!=='string')return null;
  const value=raw.trim();
- if(/^\\d{1,3}$/.test(value)){const minutes=Number(value);return minutes<=180?minutes:null}
- const match=value.match(/^(?:aprox\\.?\\s*)?(\\d{1,3})\\s*(?:min(?:utos|utes)?|m\\b)/i);
+ if(/^\d{1,3}$/.test(value)){const minutes=Number(value);return minutes<=180?minutes:null}
+ const match=value.match(/^(?:aprox\.?\s*)?(\d{1,3})\s*(?:min(?:utos|utes)?|m\b)/i);
  return match&&Number(match[1])<=180?Number(match[1]):null;
 }
 function extractBusEta(obj){
@@ -737,9 +737,9 @@ function extractBusEta(obj){
 function busId(obj){
  const raw=String(obj.id??obj.identifier??obj.codigo??obj.code??obj.properties?.id??'').trim();
  // Zaragoza can provide an absolute URI instead of a simple TUZSA identifier.
- const token=raw.match(/(?:tuzsa|rural)[-_]\\d+/i);
+ const token=raw.match(/(?:tuzsa|rural)[-_]\d+/i);
  if(token)return token[0].replace('_','-').toLowerCase();
- const numeric=raw.match(/^\\d{1,6}$/);
+ const numeric=raw.match(/^\d{1,6}$/);
  return numeric?'tuzsa-'+numeric[0]:'';
 }
 function drawServicesBus(){
