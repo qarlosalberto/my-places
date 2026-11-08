@@ -83,7 +83,7 @@ window.__servicesE2E = {
     window.__servicesE2E.open();
   });
   await expect(page.locator('#servicesMap.leaflet-container')).toBeVisible();
-  await expect(page.locator('#servicesStatus')).toContainText('2 arrivals received');
+  await expect(page.locator('#servicesStatus')).toContainText('2 stops with ETA');
 }
 
 test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise, and mobile tap opens details', async ({ page }) => {
@@ -126,6 +126,8 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
   });
   await page.mouse.click(clickPoint.x, clickPoint.y);
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 35: 22 min');
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 23: 6 min');
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 40: No prediction');
   // Regression: a Leaflet moveend after selecting a stop must not remove its popup.
   await page.evaluate(() => window.__servicesE2E.map().fire('moveend'));
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Line 35: 22 min');
@@ -171,7 +173,7 @@ test('a failed municipal ETA request never claims a live arrival or colors it re
   expect(touchTargetCount).toBeGreaterThan(0);
   // Ensure the stop remains unknown and no fabricated "over 15 min" estimate appears.
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toHaveCount(0);
-  await expect(page.locator('#servicesStatus')).toContainText('0 arrivals received');
+  await expect(page.locator('#servicesStatus')).toContainText('0 stops with ETA');
 });
 
 test('multiselect independently toggles Bizi and Bus; Bizi 3/2/0 remain green/yellow/red', async ({ page }) => {
