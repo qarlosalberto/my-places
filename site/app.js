@@ -604,6 +604,47 @@ const SERVICES_GBFS='https://zaragoza.publicbikesystem.net/customer/gbfs/v3.0/gb
 let serviceStations=[],serviceBuses=[],serviceBikeFetched=0,serviceBusFetched=0,serviceRun=0,serviceBusRequesting=false;
 let serviceBikeStatus='Not loaded',serviceBusStatus='Not loaded',serviceRefreshTimer=null;
 let serviceBusSuccess=0,serviceBusErrors=0,serviceBusNoPrediction=0;
+let servicesCharts={};let servicesChartLoaded=false;
+function serviceStatCard(label,value,note){
+ const card=document.createElement('div');card.className='serviceStatCard';
+ const small=document.createElement('span');small.textContent=label;
+ const strong=document.createElement('strong');strong.textContent=value;
+ const desc=document.createElement('span');desc.textContent=note||'';
+ card.append(small,strong,desc);return card;
+}
+function serviceChart(id,type,labels,values,colors){
+ const canvas=$(id), ChartJS=window.Chart;if(!canvas)return;
+ if(!ChartJS){canvas.hidden=true;return}
+ canvas.hidden=false;
+ const current=servicesCharts[id];if(current)current.destroy();
+ servicesCharts[id]=new ChartJS(canvas,{type,data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:0,borderRadius:type==='bar'?4:0}]},
+ options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:11,font:{size:11}}}},
+ ...(type==='bar'?{scales:{y:{beginAtZero:true,ticks:{precision:0}},x:{ticks:{font:{size:10}}}}}:{})}});
+}
+function renderServiceStatistics(){
+ const cards=$('servicesStatCards');if(!cards)return;
+ cards.replaceChildren();
+ const bikes=serviceStations,known=bikes.filter(b=>b.available!==null),knownBroken=bikes.filter(b=>b.disabled!==null);
+ const available=known.reduce((v,b)=>v+b.available,0),disabled=knownBroken.reduce((v,b)=>v+b.disabled,0);
+ const empty=known.filter(b=>b.available===0).length,low=known.filter(b=>b.available>0&&b.available<=2).length,good=known.filter(b=>b.available>2).length;
+ const brokenStations=knownBroken.filter(b=>b.disabled>0).length;
+ const arrivals=serviceBuses.flatMap(b=>b.arrivals||[]);
+ const predicted=arrivals.filter(a=>a.minutes!==null),long=predicted.filter(a=>a.minutes>15).length;
+ cards.append(
+  serviceStatCard('Bizi · available bikes',known.length?available:'—',known.length+'/'+bikes.length+' stations report counts'),
+  serviceStatCard('Bizi · out of service',knownBroken.length?disabled:'—',knownBroken.length+'/'+bikes.length+' stations report faults'),
+  serviceStatCard('Bizi · empty stations',known.length?empty:'—','Among stations with reported counts'),
+  serviceStatCard('Bus · lines with >15 min wait',predicted.length?long:'—',predicted.length+' known line estimates in checked stops')
+ );
+ $('servicesStatsTimestamp').textContent='Last refreshed: '+new Date().toLocaleTimeString()+' · Snapshot of available API responses.';
+ $('servicesBiziChartNote').textContent=known.length?known.length+' stations with reported availability; '+(bikes.length-known.length)+' unknown.':'No reliable station availability counts yet.';
+ $('servicesBreakdownNote').textContent=knownBroken.length?'Reported out-of-service bicycles at '+knownBroken.length+' stations; '+(bikes.length-knownBroken.length)+' stations do not report breakdowns. Values may cover different station subsets.':'Breakdown counts are not published by the current source. This is unknown, not zero.';
+ $('servicesBusChartNote').textContent=predicted.length?predicted.length+' known line-level predictions across '+serviceBuses.filter(b=>(b.arrivals||[]).some(a=>a.minutes!==null)).length+' stops. '+serviceBusErrors+' request errors.':'No verified line-level arrival times yet; this does not imply zero long waits.';
+ serviceChart('servicesBiziChart','doughnut',['3+ bikes','1–2 bikes','Empty'],[good,low,empty],['#18875b','#e9a52f','#d94749']);
+ serviceChart('servicesBreakdownChart','bar',['Available bikes','Reported broken bikes'],[available,disabled],['#18875b','#e9a52f']);
+ serviceChart('servicesBusChart','bar',['0–5 min','6–15 min','>15 min'],[predicted.filter(a=>a.minutes<=5).length,predicted.filter(a=>a.minutes>5&&a.minutes<=15).length,long],['#18875b','#4274c7','#d94749']);
+}
+
 const servicesEnabled=kind=>$(kind==='bus'?'servicesBus':'servicesBizi').checked;
 function serviceStatus(){
  $('servicesStatus').textContent=[servicesEnabled('bizi')?'Bizi: '+serviceBikeStatus:null,servicesEnabled('bus')?'Bus: '+serviceBusStatus:null].filter(Boolean).join(' · ')||'Choose Bus and/or Bizi above.';
@@ -647,8 +688,9 @@ function servicePopup(title,lines){
 function drawServicesBizi(){
  if(!servicesBiziLayer)return;servicesBiziLayer.clearLayers();
  if(!servicesEnabled('bizi'))return;
+ const brokenOnly=$('servicesBrokenOnly')?.checked===true;
  for(const st of serviceStations){
-  if(!st.coords)continue;
+  if(!st.coords||(brokenOnly&&!(st.disabled>0)))continue;
   const n=st.available,disabled=st.disabled;
   const color=n===null?'#89929f':n===0?'#d94749':n<=2?'#e9a52f':'#18875b';
   const marker=L.marker(st.coords,{icon:serviceIcon(n===null?'?':String(n),color,'bike',disabled),keyboard:true,zIndexOffset:750});
@@ -680,7 +722,7 @@ async function loadServicesBizi(force=false){
    return {name,coords:serviceCoords(st),available:bikeValue!=null&&Number.isFinite(count)?count:null,docks:a.num_docks_available!=null&&Number.isFinite(docks)?docks:null,disabled:disabledValue!=null&&Number.isFinite(disabled)?disabled:null,renting:a.is_renting!==false&&a.is_renting!==0};
   }).filter(st=>st.coords);
   if(!stations.length)throw Error('No station coordinates');
-  serviceStations=stations;serviceBikeFetched=Date.now();serviceBikeStatus=stations.length+' stations · updated '+new Date().toLocaleTimeString();drawServicesBizi();
+  serviceStations=stations;serviceBikeFetched=Date.now();serviceBikeStatus=stations.length+' stations · updated '+new Date().toLocaleTimeString();drawServicesBizi();renderServiceStatistics();
  }catch(e){
   // The GBFS provider can restrict direct browser access. Fall back to Zaragoza's public station API.
   try{
@@ -697,10 +739,10 @@ async function loadServicesBizi(force=false){
     if(batch.length<500)break;
    }
    if(!found.length)throw Error('No stations from municipal API');
-   serviceStations=found;serviceBikeFetched=Date.now();serviceBikeStatus=found.length+' stations · municipal API (breakdowns unavailable)';drawServicesBizi();
+   serviceStations=found;serviceBikeFetched=Date.now();serviceBikeStatus=found.length+' stations · municipal API (breakdowns unavailable)';drawServicesBizi();renderServiceStatistics();
   }catch(fallbackError){serviceBikeStatus='Unavailable ('+fallbackError.message+')';servicesBiziLayer?.clearLayers();serviceStations=[]}
  }
- serviceStatus();
+ renderServiceStatistics();serviceStatus();
 }
 function busEta(record){
  if(record===null||record===undefined)return null;
