@@ -86,16 +86,28 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
       window.__servicesE2E.eta({ destinos: [{ primero: 'En la parada' }] }),
       window.__servicesE2E.eta({ destinos: [{ primero: 'Sin información' }] })
     ],
-    circles: window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 15 || x.options?.radius === 18).map(x => ({ radius: x.options.radius, color: x.options.fillColor })),
-    tapTargets: window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 28).length
+    circles: window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 19 || x.options?.radius === 22).map(x => ({ radius: x.options.radius, color: x.options.fillColor })),
+    tapTargets: window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 34).length
   }));
   expect(results.parsed).toEqual([22, 6, 0, null]);
   expect(results.circles).toEqual(expect.arrayContaining([
-    { radius: 18, color: '#d94749' },
-    { radius: 18, color: '#4274c7' },
-    { radius: 15, color: '#3f84c5' }
+    { radius: 22, color: '#d94749' },
+    { radius: 22, color: '#4274c7' },
+    { radius: 19, color: '#3f84c5' }
   ]));
   expect(results.tapTargets).toBe(3);
+  const touchSizes = await page.locator('#servicesMap .servicesBusLabel').evaluateAll(nodes =>
+    nodes.map(node => {
+      const rect = node.getBoundingClientRect();
+      const image = node.querySelector('span');
+      return { width: rect.width, height: rect.height, glyph: parseFloat(getComputedStyle(image).fontSize) };
+    }));
+  expect(touchSizes).toHaveLength(3);
+  for (const size of touchSizes) {
+    expect(size.width).toBeGreaterThanOrEqual(42);
+    expect(size.height).toBeGreaterThanOrEqual(42);
+    expect(size.glyph).toBeGreaterThanOrEqual(25);
+  }
 
   const clickPoint = await page.evaluate(() => {
     const map = window.__servicesE2E.map();
@@ -105,6 +117,41 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
   });
   await page.mouse.click(clickPoint.x, clickPoint.y);
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toContainText('Next arrival: 22 min');
+});
+
+test('a failed municipal ETA request never claims a live arrival or colors it red', async ({ page }) => {
+  await page.route('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', route =>
+    route.fulfill({ path: leafletJs, contentType: 'application/javascript' }));
+  await page.route('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', route =>
+    route.fulfill({ path: leafletCss, contentType: 'text/css' }));
+  await page.route(/\/app\.js\?v=/, async route => {
+    let source = await (await route.fetch()).text();
+    source = source.replace(/^import .*;\s*$/gm, '').replace(/^const configured=.*;$/m, 'const configured=false;');
+    source += '\nwindow.__openServicesForTest = () => selectMainTab("services");';
+    await route.fulfill({ body: source, contentType: 'application/javascript' });
+  });
+  await page.route(GBFS + 'gbfs.json', route => route.fulfill(json({ data: { feeds: [] } })));
+  await page.route('**/estacion-bicicleta.json?*', route => route.fulfill(json({ result: [] })));
+  await page.route(API + '.json?*', route => route.fulfill(json({
+    result: [{ id: 'tuzsa-798', title: 'Sin tiempos', geometry: { coordinates: [-0.8891, 41.6488] } }]
+  })));
+  await page.route(/poste-autobus\/tuzsa-798\.json/, route => route.fulfill({ status: 503, body: 'Unavailable' }));
+  await page.route('https://*.tile.openstreetmap.org/**', route => route.abort());
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.evaluate(() => Boolean(window.__openServicesForTest))).toBe(true);
+  await page.evaluate(() => {
+    document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('headerToolbar').classList.remove('hidden');
+    document.getElementById('servicesBizi').checked = false;
+    window.__openServicesForTest();
+  });
+  await expect(page.locator('#servicesStatus')).toContainText('1 request errors');
+  const visual = await page.locator('#servicesMap .servicesBusLabel').count();
+  expect(visual).toBe(1);
+  const stroke = await page.locator('#servicesMap .leaflet-overlay-pane svg path[stroke]').first().getAttribute('stroke');
+  // Ensure the stop remains unknown and no fabricated "over 15 min" estimate appears.
+  await expect(page.locator('#servicesMap .leaflet-popup-content')).toHaveCount(0);
+  await expect(page.locator('#servicesStatus')).toContainText('0 arrivals received');
 });
 
 test('multiselect independently toggles Bizi and Bus; Bizi 3/2/0 remain green/yellow/red', async ({ page }) => {
