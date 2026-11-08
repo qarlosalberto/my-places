@@ -816,7 +816,7 @@ function busId(obj){
 function drawServicesBus(){
  if(!servicesBusLayer)return;
  if(!servicesEnabled('bus')){clearBusMarkers();return}
- const bounds=servicesMap?.getBounds(),detailZoom=servicesMap?.getZoom()>=14,active=new Set();
+ const bounds=servicesMap?.getBounds(),zoom=servicesMap?.getZoom()??0,detailZoom=zoom>=12,active=new Set();
  for(const st of serviceBuses){
   if(!st.coords||!detailZoom||!bounds?.pad(.2).contains(st.coords))continue;
   const arrivals=st.arrivals||[];
@@ -827,18 +827,20 @@ function drawServicesBus(){
   const longest=known.some(a=>a.minutes>15);
   // Any line over 15 minutes makes this stop red; the popup details each line.
   const color=longest?'#d94749':'#4274c7';
-  const shape={radius:22,color:'#fff',weight:2.5,fillColor:color,fillOpacity:.94};
+  const shape={radius:zoom>=14?22:zoom===13?14:10,color:'#fff',weight:zoom>=14?2.5:1.5,fillColor:color,fillOpacity:.94};
+  const tapRadius=zoom>=14?34:zoom===13?24:17;
   const lines=arrivals.length?arrivals.map(a=>'Line '+a.line+': '+(a.minutes===null?'No prediction':a.minutes+' min'+(a.minutes>15?' · over 15 min':''))):['No line-level prediction available'];
-  const signature=JSON.stringify([color,lines]);
+  const signature=JSON.stringify([color,lines,shape.radius,tapRadius]);
   let entry=persistentBusMarkers.get(st.id);
   if(!entry){
    const ring=L.circleMarker(st.coords,{pane:'servicesBusPane',...shape,interactive:false}).addTo(servicesBusLayer);
-   const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:34,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
+   const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:tapRadius,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
    tap.bindPopup(servicePopup('Stop '+st.name,lines),{autoPan:false}).addTo(servicesBusLayer);
    entry={ring,tap,signature};
    persistentBusMarkers.set(st.id,entry);
   }else if(entry.signature!==signature){
    entry.ring.setStyle(shape);entry.ring.setRadius(shape.radius);
+   entry.tap.setRadius(tapRadius);
    entry.tap.setPopupContent(servicePopup('Stop '+st.name,lines));
    entry.signature=signature;
   }
@@ -868,7 +870,7 @@ async function loadServicesBuses(force=false){
  serviceStatus();
 }
 async function loadVisibleBusEtas(){
- if(!servicesMap||!servicesEnabled('bus')||servicesMap.getZoom()<14||serviceBusRequesting||!serviceBuses.length)return;
+ if(!servicesMap||!servicesEnabled('bus')||servicesMap.getZoom()<12||serviceBusRequesting||!serviceBuses.length)return;
  const now=Date.now(),bounds=servicesMap.getBounds().pad(.12);
  const targets=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&bounds.contains(st.coords)&&now-st.checked>60000).slice(0,24);
  if(!targets.length)return;
