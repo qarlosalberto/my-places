@@ -677,7 +677,25 @@ async function loadServicesBizi(force=false){
   }).filter(st=>st.coords);
   if(!stations.length)throw Error('No station coordinates');
   serviceStations=stations;serviceBikeFetched=Date.now();serviceBikeStatus=stations.length+' stations · updated '+new Date().toLocaleTimeString();drawServicesBizi();
- }catch(e){serviceBikeStatus='Unavailable ('+e.message+')';servicesBiziLayer?.clearLayers();serviceStations=[]}
+ }catch(e){
+  // The GBFS provider can restrict direct browser access. Fall back to Zaragoza's public station API.
+  try{
+   const found=[];
+   for(let start=0;start<4000;start+=500){
+    const page=await serviceJson('https://www.zaragoza.es/sede/servicio/urbanismo-infraestructuras/estacion-bicicleta.json?rows=500&start='+start+'&srsname=wgs84');
+    const batch=serviceItems(page);
+    for(const row of batch){
+     const available=row.bicisDisponibles!=null?Number(row.bicisDisponibles):null;
+     const docks=row.anclajesDisponibles!=null?Number(row.anclajesDisponibles):null;
+     const coords=serviceCoords(row);
+     if(coords)found.push({name:String(row.title??row.nombre??row.id??'Bizi'),coords,available:Number.isFinite(available)?available:null,docks:Number.isFinite(docks)?docks:null,disabled:null,renting:row.estado!=='CLO'});
+    }
+    if(batch.length<500)break;
+   }
+   if(!found.length)throw Error('No stations from municipal API');
+   serviceStations=found;serviceBikeFetched=Date.now();serviceBikeStatus=found.length+' stations · municipal API (breakdowns unavailable)';drawServicesBizi();
+  }catch(fallbackError){serviceBikeStatus='Unavailable ('+fallbackError.message+')';servicesBiziLayer?.clearLayers();serviceStations=[]}
+ }
  serviceStatus();
 }
 function busArrivalRows(obj){
