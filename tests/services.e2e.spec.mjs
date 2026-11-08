@@ -112,6 +112,9 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
     expect(size.glyph).toBeGreaterThanOrEqual(25);
   }
 
+  // On 320px devices the map can start partly below the fold; scroll before coordinate-based touch.
+  await page.locator('#servicesMap').scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.__servicesE2E.map().invalidateSize());
   const clickPoint = await page.evaluate(() => {
     const map = window.__servicesE2E.map();
     const point = map.latLngToContainerPoint([41.6488, -0.8891]);
