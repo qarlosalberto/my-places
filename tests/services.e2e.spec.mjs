@@ -96,16 +96,17 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
       window.__servicesE2E.eta({ destinos: [{ primero: 'En la parada' }] }),
       window.__servicesE2E.eta({ destinos: [{ primero: 'Sin información' }] })
     ],
-    circles: window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 19 || x.options?.radius === 22).map(x => ({ radius: x.options.radius, color: x.options.fillColor })),
+    circles: window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 22).map(x => ({ radius: x.options.radius, color: x.options.fillColor })),
     tapTargets: window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 34).length
   }));
   expect(results.parsed).toEqual([22, 6, 0, null]);
   expect(results.circles).toEqual(expect.arrayContaining([
     { radius: 22, color: '#d94749' },
-    { radius: 22, color: '#4274c7' },
-    { radius: 19, color: '#3f84c5' }
+    { radius: 22, color: '#4274c7' }
   ]));
-  expect(results.tapTargets).toBe(3);
+  expect(results.tapTargets).toBe(2);
+  // Stop 800 has no valid arrivals on any route, so it must not be drawn.
+  expect(results.circles).toHaveLength(2);
   // No bus pictograms should be rendered: circles are the entire tap affordance.
   await expect(page.locator('#servicesMap .servicesBusLabel')).toHaveCount(0);
   const routeDetails = await page.evaluate(() =>
@@ -171,7 +172,7 @@ test('a failed municipal ETA request never claims a live arrival or colors it re
   });
   await expect(page.locator('#servicesStatus')).toContainText('1 request errors');
   const touchTargetCount = await page.evaluate(() => document.querySelectorAll('#servicesMap .leaflet-overlay-pane .leaflet-interactive').length);
-  expect(touchTargetCount).toBeGreaterThan(0);
+  expect(touchTargetCount).toBe(0);
   // Ensure the stop remains unknown and no fabricated "over 15 min" estimate appears.
   await expect(page.locator('#servicesMap .leaflet-popup-content')).toHaveCount(0);
   await expect(page.locator('#servicesStatus')).toContainText('0 stops with ETA');
@@ -194,7 +195,7 @@ test('multiselect independently toggles Bizi and Bus; Bizi 3/2/0 remain green/ye
   await page.locator('#servicesBizi').uncheck();
   await expect(page.locator('#servicesMap .serviceMarker-bike')).toHaveCount(0);
   await page.locator('#servicesBus').check();
-  await expect.poll(() => page.evaluate(() => window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 34).length)).toBe(3);
+  await expect.poll(() => page.evaluate(() => window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 34).length)).toBe(2);
 });
 
 test('broken-bikes-only filter keeps exactly the stations reporting faults, and Chart.js stats reflect current snapshot', async ({page}) => {
