@@ -600,7 +600,7 @@ const SERVICES_BUS='https://www.zaragoza.es/sede/servicio/urbanismo-infraestruct
 const SERVICES_GBFS='https://zaragoza.publicbikesystem.net/customer/gbfs/v3.0/gbfs.json';
 let serviceStations=[],serviceBuses=[],serviceBikeFetched=0,serviceBusFetched=0,serviceRun=0,serviceBusRequesting=false;
 let serviceBikeStatus='Not loaded',serviceBusStatus='Not loaded',serviceRefreshTimer=null;
-let serviceBusSuccess=0,serviceBusErrors=0;
+let serviceBusSuccess=0,serviceBusErrors=0,serviceBusNoPrediction=0;
 const servicesEnabled=kind=>$(kind==='bus'?'servicesBus':'servicesBizi').checked;
 function serviceStatus(){
  $('servicesStatus').textContent=[servicesEnabled('bizi')?'Bizi: '+serviceBikeStatus:null,servicesEnabled('bus')?'Bus: '+serviceBusStatus:null].filter(Boolean).join(' · ')||'Choose Bus and/or Bizi above.';
@@ -769,7 +769,7 @@ async function loadServicesBuses(force=false){
  if(!force&&serviceBuses.length&&Date.now()-serviceBusFetched<3600000){drawServicesBus();loadVisibleBusEtas();return}
  serviceBusStatus='Loading stops…';serviceStatus();
  try{
-  serviceBusSuccess=0;serviceBusErrors=0;
+  serviceBusSuccess=0;serviceBusErrors=0;serviceBusNoPrediction=0;
   const all=[],seen=new Set();
   for(let start=0;start<4000;start+=500){
    const payload=await serviceJson(SERVICES_BUS+'.json?rows=500&start='+start+'&srsname=wgs84');
@@ -794,14 +794,14 @@ async function loadVisibleBusEtas(){
    try{
     const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');
     st.eta=extractBusEta(p);
-    if(st.eta!==null)serviceBusSuccess++;
+    if(st.eta!==null)serviceBusSuccess++;else serviceBusNoPrediction++;
    }catch(e){
     st.eta=null;serviceBusErrors++;
    }
   }
  }));
  serviceBusRequesting=false;
- serviceBusStatus=serviceBuses.length+' stops · '+serviceBusSuccess+' arrivals received · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();serviceStatus();
+ serviceBusStatus=serviceBuses.length+' stops · '+serviceBusSuccess+' arrivals received · '+serviceBusNoPrediction+' responses without ETA · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();serviceStatus();
 }
 function startServices(){
  if(!servicesMap){
