@@ -765,20 +765,44 @@ function parseBusMinutes(raw){
  const match=value.match(/^(?:aprox\.?\s*)?(\d{1,3})\s*(?:min(?:utos|utes)?|m\b)/i);
  return match&&Number(match[1])<=180?Number(match[1]):null;
 }
-function extractBusEta(obj){
- const found=[];
- const visit=(value,depth=0)=>{
-  if(depth>7||value==null)return;
-  if(Array.isArray(value)){for(const item of value)visit(item,depth+1);return}
+function extractBusLines(obj){
+ // A separate prediction is retained for each route serving this stop.
+ // Both "primero" and "segundo" belong to that same route; the smaller is next.
+ const byLine=new Map();let unnamed=0;
+ const isLineKey=/^(linea|línea|line|route|route_id|linea_id|lineNumber|numeroLinea|numLinea)$/i;
+ const etaKey=/^(primero|segundo|primerBus|segundoBus|tiempo|tiempoEspera|tiempoLlegada|tiempo_espera|minutos|minutes|espera|arrival_in_minutes|arrivalInMinutes|waitingTime|wait|prediction|timeLeft|remainingMinutes|proximo|proximaLlegada)$/i;
+ const walk=(value,depth=0,inGroup=false)=>{
+  if(depth>8||value==null)return;
+  if(Array.isArray(value)){for(const x of value)walk(x,depth+1,inGroup);return}
   if(typeof value!=='object')return;
-  const eta=busEta(value);if(eta!==null)found.push(eta);
-  // Traverse response wrappers and lists; never infer times from arbitrary numbers.
+  let line='';
+  for(const [key,v] of Object.entries(value)){
+   if(!isLineKey.test(key)||v===null||v===undefined)continue;
+   if(typeof v==='string'||typeof v==='number')line=String(v).trim();
+   else if(typeof v==='object')line=String(v.nombre??v.numero??v.id??'').trim();
+   if(line)break;
+  }
+  const times=[];
+  for(const [key,v] of Object.entries(value)){
+   if(etaKey.test(key)){const n=parseBusMinutes(v);if(n!==null)times.push(n)}
+  }
+  if(line||times.length){
+   const normalized=line||'Unknown line '+(++unnamed);
+   const incoming=times.length?Math.min(...times):null;
+   const existing=byLine.get(normalized);
+   if(existing===undefined||existing===null)byLine.set(normalized,incoming);
+   else if(incoming!==null)byLine.set(normalized,Math.min(existing,incoming));
+  }
   for(const [key,child] of Object.entries(value)){
-   if(child&&typeof child==='object'&&/^(result|results|data|datos|features|properties|lineas|lines|tiempos|tiemposEspera|llegadas|arrivals|destinos|estimaciones|predicciones|bus|buses|servicios|poste|posteAutobus|autobuses|resultado|respuesta)$/i.test(key))visit(child,depth+1);
+   if(child&&typeof child==='object'&&/^(result|results|data|datos|features|properties|lineas|lines|tiempos|tiemposEspera|llegadas|arrivals|destinos|estimaciones|predicciones|bus|buses|servicios|poste|posteAutobus|autobuses|resultado|respuesta)$/i.test(key))walk(child,depth+1,true);
   }
  };
- visit(obj);
- return found.length?Math.min(...found):null;
+ walk(obj);
+ return [...byLine].map(([line,minutes])=>({line,minutes})).sort((a,b)=>a.line.localeCompare(b.line,undefined,{numeric:true}));
+}
+function extractBusEta(obj){
+ const known=extractBusLines(obj).map(x=>x.minutes).filter(n=>n!==null);
+ return known.length?Math.min(...known):null;
 }
 function busId(obj){
  const raw=String(obj.id??obj.identifier??obj.codigo??obj.code??obj.properties?.id??'').trim();
@@ -791,34 +815,35 @@ function busId(obj){
 function drawServicesBus(){
  if(!servicesBusLayer)return;
  if(!servicesEnabled('bus')){clearBusMarkers();return}
- const bounds=servicesMap?.getBounds(),detailZoom=servicesMap?.getZoom()>=14;
- const active=new Set();
+ const bounds=servicesMap?.getBounds(),detailZoom=servicesMap?.getZoom()>=14,active=new Set();
  for(const st of serviceBuses){
   if(!st.coords||!detailZoom||!bounds?.pad(.2).contains(st.coords))continue;
   active.add(st.id);
-  const eta=st.eta, color=eta===null?'#3f84c5':eta>15?'#d94749':'#4274c7';
-  const shape={radius:eta===null?19:22,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?3:2.5,fillColor:color,fillOpacity:eta===null?.17:.94};
-  const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
+  const arrivals=st.arrivals||[];
+  const known=arrivals.filter(a=>a.minutes!==null);
+  const longest=known.some(a=>a.minutes>15);
+  const eta=known.length?Math.min(...known.map(a=>a.minutes)):null;
+  // Any line over 15 minutes makes this stop red; the popup details each line.
+  const color=!known.length?'#3f84c5':longest?'#d94749':'#4274c7';
+  const shape={radius:known.length?22:19,color:known.length?'#fff':'#3f84c5',weight:known.length?2.5:3,fillColor:color,fillOpacity:known.length?.94:.17};
+  const lines=arrivals.length?arrivals.map(a=>'Line '+a.line+': '+(a.minutes===null?'No prediction':a.minutes+' min'+(a.minutes>15?' · over 15 min':''))):['No line-level prediction available'];
+  const signature=JSON.stringify([color,lines]);
   let entry=persistentBusMarkers.get(st.id);
   if(!entry){
    const ring=L.circleMarker(st.coords,{pane:'servicesBusPane',...shape,interactive:false}).addTo(servicesBusLayer);
-   const label=L.marker(st.coords,{pane:'servicesBusPane',interactive:false,icon:L.divIcon({className:'servicesBusLabel',html:'<span aria-hidden="true">🚌</span>',iconSize:[42,42],iconAnchor:[21,21]})}).addTo(servicesBusLayer);
    const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:34,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
-   tap.bindPopup(servicePopup('🚌 '+st.name,lines),{autoPan:false}).addTo(servicesBusLayer);
-   entry={ring,label,tap,eta};
+   tap.bindPopup(servicePopup('Stop '+st.name,lines),{autoPan:false}).addTo(servicesBusLayer);
+   entry={ring,tap,signature};
    persistentBusMarkers.set(st.id,entry);
-  }else if(entry.eta!==eta){
-   entry.ring.setStyle(shape);
-   entry.ring.setRadius(shape.radius);
-   entry.tap.setPopupContent(servicePopup('🚌 '+st.name,lines));
-   entry.eta=eta;
+  }else if(entry.signature!==signature){
+   entry.ring.setStyle(shape);entry.ring.setRadius(shape.radius);
+   entry.tap.setPopupContent(servicePopup('Stop '+st.name,lines));
+   entry.signature=signature;
   }
  }
  for(const [id,entry] of persistentBusMarkers){
-  if(active.has(id))continue;
-  // Keep a selected stop alive during map movement so its open popup persists.
-  if(entry.tap.isPopupOpen())continue;
-  servicesBusLayer.removeLayer(entry.ring);servicesBusLayer.removeLayer(entry.label);servicesBusLayer.removeLayer(entry.tap);
+  if(active.has(id)||entry.tap.isPopupOpen())continue;
+  servicesBusLayer.removeLayer(entry.ring);servicesBusLayer.removeLayer(entry.tap);
   persistentBusMarkers.delete(id);
  }
 }
@@ -832,7 +857,7 @@ async function loadServicesBuses(force=false){
   for(let start=0;start<4000;start+=500){
    const payload=await serviceJson(SERVICES_BUS+'.json?rows=500&start='+start+'&srsname=wgs84');
    const batch=serviceItems(payload);
-   for(const p of batch){const id=busId(p);const coords=serviceCoords(p);if(id&&coords&&!seen.has(id)){seen.add(id);all.push({id,coords,name:String(p.title??p.nombre??p.name??id),eta:null,checked:0})}}
+   for(const p of batch){const id=busId(p);const coords=serviceCoords(p);if(id&&coords&&!seen.has(id)){seen.add(id);all.push({id,coords,name:String(p.title??p.nombre??p.name??id),eta:null,arrivals:[],checked:0})}}
    if(batch.length<500)break;
   }
   if(!all.length)throw Error('No bus stops found');
@@ -851,15 +876,16 @@ async function loadVisibleBusEtas(){
    const st=targets[i];st.checked=Date.now();
    try{
     const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');
+    st.arrivals=extractBusLines(p);
     st.eta=extractBusEta(p);
-    if(st.eta!==null)serviceBusSuccess++;else serviceBusNoPrediction++;
+    if(st.arrivals.some(a=>a.minutes!==null))serviceBusSuccess++;else serviceBusNoPrediction++;
    }catch(e){
-    st.eta=null;serviceBusErrors++;
+    st.eta=null;st.arrivals=[];serviceBusErrors++;
    }
   }
  }));
  serviceBusRequesting=false;
- serviceBusStatus=serviceBuses.length+' stops · '+serviceBusSuccess+' arrivals received · '+serviceBusNoPrediction+' responses without ETA · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();serviceStatus();
+ serviceBusStatus=serviceBuses.length+' stops · '+serviceBusSuccess+' arrivals received · '+serviceBusNoPrediction+' responses without ETA · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();renderServiceStatistics();serviceStatus();
 }
 function startServices(){
  if(!servicesMap){
