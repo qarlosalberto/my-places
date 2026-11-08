@@ -600,6 +600,7 @@ const SERVICES_BUS='https://www.zaragoza.es/sede/servicio/urbanismo-infraestruct
 const SERVICES_GBFS='https://zaragoza.publicbikesystem.net/customer/gbfs/v3.0/gbfs.json';
 let serviceStations=[],serviceBuses=[],serviceBikeFetched=0,serviceBusFetched=0,serviceRun=0,serviceBusRequesting=false;
 let serviceBikeStatus='Not loaded',serviceBusStatus='Not loaded',serviceRefreshTimer=null;
+let serviceBusSuccess=0,serviceBusErrors=0;
 const servicesEnabled=kind=>$(kind==='bus'?'servicesBus':'servicesBizi').checked;
 function serviceStatus(){
  $('servicesStatus').textContent=[servicesEnabled('bizi')?'Bizi: '+serviceBikeStatus:null,servicesEnabled('bus')?'Bus: '+serviceBusStatus:null].filter(Boolean).join(' · ')||'Choose Bus and/or Bizi above.';
@@ -698,26 +699,48 @@ async function loadServicesBizi(force=false){
  }
  serviceStatus();
 }
-function busArrivalRows(obj){
- const candidates=[obj?.tiempos,obj?.tiempoEspera,obj?.tiemposEspera,obj?.arrivals,obj?.llegadas,obj?.estimaciones,obj?.lineas,obj?.lines,obj?.datos?.tiempos,obj?.data?.arrivals];
- let rows=candidates.find(Array.isArray)||[];
- if(!rows.length){for(const value of Object.values(obj||{})){if(Array.isArray(value)&&value.some(i=>typeof i==='object')){rows=value;break}}}
- return rows;
-}
 function busEta(record){
- const raw=record?.minutos??record?.minutes??record?.tiempo??record?.tiempoEspera??record?.espera??record?.arrival_in_minutes??record?.prediction;
- if(typeof raw==='number'&&Number.isFinite(raw))return raw>=0?raw:null;
- if(typeof raw==='string'){const match=raw.match(/(\d{1,3})\s*(min|m\b)/i);if(match)return Number(match[1]);if(/^\d{1,3}$/.test(raw.trim()))return Number(raw.trim())}
+ if(record===null||record===undefined)return null;
+ if(typeof record==='string'||typeof record==='number')return parseBusMinutes(record);
+ if(typeof record!=='object')return null;
+ // Do not interpret route numbers, stop IDs, timestamps or unrelated numeric fields as arrival times.
+ for(const [key,value] of Object.entries(record)){
+  if(/^(minutos|minutes|tiempo|tiempoEspera|tiempoLlegada|tiempo_espera|espera|arrival_in_minutes|arrivalInMinutes|waitingTime|wait|prediction|timeLeft|remainingMinutes|proximo|proximaLlegada)$/i.test(key)){
+   const parsed=parseBusMinutes(value);if(parsed!==null)return parsed;
+  }
+ }
  return null;
 }
+function parseBusMinutes(raw){
+ if(typeof raw==='number')return Number.isFinite(raw)&&raw>=0&&raw<=180?raw:null;
+ if(typeof raw!=='string')return null;
+ const value=raw.trim();
+ if(/^\\d{1,3}$/.test(value)){const minutes=Number(value);return minutes<=180?minutes:null}
+ const match=value.match(/^(?:aprox\\.?\\s*)?(\\d{1,3})\\s*(?:min(?:utos|utes)?|m\\b)/i);
+ return match&&Number(match[1])<=180?Number(match[1]):null;
+}
 function extractBusEta(obj){
- const rows=busArrivalRows(obj);let values=rows.map(busEta).filter(n=>n!==null);
- if(!values.length){const n=busEta(obj);if(n!==null)values=[n]}
- return values.length?Math.min(...values):null;
+ const found=[];
+ const visit=(value,depth=0)=>{
+  if(depth>7||value==null)return;
+  if(Array.isArray(value)){for(const item of value)visit(item,depth+1);return}
+  if(typeof value!=='object')return;
+  const eta=busEta(value);if(eta!==null)found.push(eta);
+  // Traverse response wrappers and lists; never infer times from arbitrary numbers.
+  for(const [key,child] of Object.entries(value)){
+   if(child&&typeof child==='object'&&/^(result|results|data|datos|features|properties|lineas|lines|tiempos|tiemposEspera|llegadas|arrivals|estimaciones|predicciones|bus|buses|servicios|poste|posteAutobus|autobuses|resultado|respuesta)$/i.test(key))visit(child,depth+1);
+  }
+ };
+ visit(obj);
+ return found.length?Math.min(...found):null;
 }
 function busId(obj){
- const id=String(obj.id??obj.identifier??obj.codigo??obj.code??'');
- return id.includes('tuzsa-')||id.includes('rural-')?id:(id?'tuzsa-'+id:'');
+ const raw=String(obj.id??obj.identifier??obj.codigo??obj.code??obj.properties?.id??'').trim();
+ // Zaragoza can provide an absolute URI instead of a simple TUZSA identifier.
+ const token=raw.match(/(?:tuzsa|rural)[-_]\\d+/i);
+ if(token)return token[0].replace('_','-').toLowerCase();
+ const numeric=raw.match(/^\\d{1,6}$/);
+ return numeric?'tuzsa-'+numeric[0]:'';
 }
 function drawServicesBus(){
  if(!servicesBusLayer)return;servicesBusLayer.clearLayers();
@@ -743,6 +766,7 @@ async function loadServicesBuses(force=false){
  if(!force&&serviceBuses.length&&Date.now()-serviceBusFetched<3600000){drawServicesBus();loadVisibleBusEtas();return}
  serviceBusStatus='Loading stops…';serviceStatus();
  try{
+  serviceBusSuccess=0;serviceBusErrors=0;
   const all=[],seen=new Set();
   for(let start=0;start<4000;start+=500){
    const payload=await serviceJson(SERVICES_BUS+'.json?rows=500&start='+start+'&srsname=wgs84');
@@ -764,11 +788,17 @@ async function loadVisibleBusEtas(){
  await Promise.all(Array.from({length:4},async(_,worker)=>{
   for(let i=worker;i<targets.length;i+=4){
    const st=targets[i];st.checked=Date.now();
-   try{const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');st.eta=extractBusEta(p)}catch(e){st.eta=null}
+   try{
+    const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');
+    st.eta=extractBusEta(p);
+    if(st.eta!==null)serviceBusSuccess++;
+   }catch(e){
+    st.eta=null;serviceBusErrors++;
+   }
   }
  }));
  serviceBusRequesting=false;
- serviceBusStatus=serviceBuses.length+' stops · checked '+targets.length+' nearby';drawServicesBus();serviceStatus();
+ serviceBusStatus=serviceBuses.length+' stops · '+serviceBusSuccess+' arrivals received · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();serviceStatus();
 }
 function startServices(){
  if(!servicesMap){
