@@ -31,6 +31,12 @@ class PublicSiteTests(unittest.TestCase):
             self.assertNotIn("initAtlas(",js)
             self.assertNotIn(".atlasScreen",css)
             self.assertNotIn(".trendControls",css)
+            # Regression: public CSS after the electoral section must survive deployment.
+            self.assertIn("#servicesMap .servicesBusLabel",css)
+            self.assertIn(".servicesChoices",css)
+            self.assertIn("#servicesMap .serviceMarker-bike",css)
+            self.assertIn("header #new.compactNew",css)
+            self.assertIn(".currentPositionHalo",css)
             self.assertFalse((published/"data").exists())
             self.assertFalse((published/"atlas.js").exists())
             self.assertFalse((published/"trends.js").exists())
