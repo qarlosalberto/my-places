@@ -646,7 +646,7 @@ function drawServicesBizi(){
  for(const st of serviceStations){
   if(!st.coords)continue;
   const n=st.available,disabled=st.disabled;
-  const color=!st.renting?'#89929f':n===null?'#89929f':n===0?'#d94749':n<=2?'#e9a52f':'#18875b';
+  const color=n===null?'#89929f':n===0?'#d94749':n<=2?'#e9a52f':'#18875b';
   const marker=L.marker(st.coords,{icon:serviceIcon(n===null?'?':String(n),color,'bike',disabled),keyboard:true,zIndexOffset:750});
   const lines=['Bikes available: '+(n===null?'Unknown':n),'Free docks: '+(st.docks??'Unknown')];
   if(disabled!==null)lines.push('🛠 Out of service: '+disabled);
@@ -730,8 +730,9 @@ function drawServicesBus(){
   const inView=bounds?.pad(.2).contains(st.coords);
   if(!inView)continue;
   const eta=detailZoom&&inView?st.eta:null;
-  const color=eta===null?'#89929f':eta>15?'#d94749':'#4274c7';
-  const marker=L.circleMarker(st.coords,{radius:eta===null?3.5:8,color:eta===null?'#a3b5c6':'#ffffff',weight:eta===null?0.8:1.5,fillColor:eta===null?'#a3b5c6':color,fillOpacity:eta===null?.35:.93});
+  const color=eta===null?'#3f84c5':eta>15?'#d94749':'#4274c7';
+  // Unknown arrivals are blue outline rings, never solid grey circles that obscure Bizi.
+  const marker=L.circleMarker(st.coords,{radius:eta===null?3.2:8,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?1.5:1.5,fillColor:color,fillOpacity:eta===null?0:.93});
   const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
   if(!detailZoom)lines.push('Zoom in to load arrival predictions');
   marker.bindPopup(servicePopup('🚌 '+st.name,lines)).addTo(servicesBusLayer);
