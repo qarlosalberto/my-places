@@ -871,26 +871,43 @@ async function loadServicesBuses(force=false){
 }
 async function loadVisibleBusEtas(){
  if(!servicesMap||!servicesEnabled('bus')||servicesMap.getZoom()<12||serviceBusRequesting||!serviceBuses.length)return;
- const now=Date.now(),bounds=servicesMap.getBounds().pad(.12);
- const targets=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&bounds.contains(st.coords)&&now-st.checked>60000).slice(0,24);
- if(!targets.length)return;
- serviceBusRequesting=true;serviceBusStatus='Checking arrivals for '+targets.length+' nearby stops…';serviceStatus();
- await Promise.all(Array.from({length:4},async(_,worker)=>{
-  for(let i=worker;i<targets.length;i+=4){
-   const st=targets[i];st.checked=Date.now();
-   try{
-    const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');
-    st.arrivals=extractBusLines(p);
-    st.eta=extractBusEta(p);
-    if(st.arrivals.some(a=>a.minutes!==null)){serviceBusSuccess++;st.apiResult='known'}else{serviceBusNoPrediction++;st.apiResult='unknown'}
-   }catch(e){
-    st.eta=null;st.arrivals=[];st.apiResult='error';serviceBusErrors++;
-   }
+ serviceBusRequesting=true;
+ try{
+  // Fetch ALL visible stops in small batches without requiring another map movement.
+  // Recompute viewport before each batch so panning/zooming naturally changes the queue.
+  while(servicesMap&&servicesEnabled('bus')&&!$('servicesPanel').classList.contains('hidden')&&servicesMap.getZoom()>=12){
+   const now=Date.now(),bounds=servicesMap.getBounds().pad(.12);
+   const visible=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&bounds.contains(st.coords));
+   const pending=visible.filter(st=>now-st.checked>60000);
+   if(!pending.length)break;
+   const batch=pending.slice(0,24);
+   // Mark at dispatch time; requests that fail are retried on the next refresh window.
+   for(const st of batch)st.checked=now;
+   serviceBusStatus='Checking arrivals: '+visible.filter(st=>st.checked>0).length+'/'+visible.length+' visible stops requested…';serviceStatus();
+   await Promise.all(Array.from({length:4},async(_,worker)=>{
+    for(let i=worker;i<batch.length;i+=4){
+     const st=batch[i];
+     try{
+      const p=await serviceJson(SERVICES_BUS+'/'+encodeURIComponent(st.id)+'.json');
+      st.arrivals=extractBusLines(p);
+      st.eta=extractBusEta(p);
+      if(st.arrivals.some(a=>a.minutes!==null)){serviceBusSuccess++;st.apiResult='known'}
+      else{serviceBusNoPrediction++;st.apiResult='unknown'}
+     }catch(e){
+      st.eta=null;st.arrivals=[];st.apiResult='error';serviceBusErrors++;
+     }
+    }
+   }));
+   // Update the map after EVERY batch, preserving existing open popups.
+   drawServicesBus();renderServiceStatistics();
+   const currentBounds=servicesMap.getBounds().pad(.12);
+   const currentVisible=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&currentBounds.contains(st.coords));
+   serviceBusStatus=serviceBuses.length+' stops · '+currentVisible.filter(st=>st.checked>0).length+'/'+currentVisible.length+' visible checked · '+serviceBuses.filter(st=>st.apiResult==='known').length+' stops with ETA · '+serviceBuses.filter(st=>st.apiResult==='unknown').length+' responses without ETA · '+serviceBuses.filter(st=>st.apiResult==='error').length+' request errors';
+   serviceStatus();
+   // Avoid flooding the city API; allow a new viewport to take priority.
+   if(pending.length>batch.length)await new Promise(resolve=>setTimeout(resolve,650));
   }
- }));
- serviceBusRequesting=false;
- const visibleStops=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&bounds.contains(st.coords));
- serviceBusStatus=serviceBuses.length+' stops · '+visibleStops.filter(st=>st.checked>0).length+'/'+visibleStops.length+' visible checked · '+serviceBuses.filter(st=>st.apiResult==='known').length+' stops with ETA · '+serviceBuses.filter(st=>st.apiResult==='unknown').length+' responses without ETA · '+serviceBuses.filter(st=>st.apiResult==='error').length+' request errors'+(!serviceBuses.some(st=>st.apiResult==='known')?' · no confirmed live times yet':'');drawServicesBus();renderServiceStatistics();serviceStatus();
+ }finally{serviceBusRequesting=false}
 }
 function startServices(){
  if(!servicesMap){
