@@ -628,6 +628,7 @@ function renderServiceStatistics(){
  const available=known.reduce((v,b)=>v+b.available,0),disabled=knownBroken.reduce((v,b)=>v+b.disabled,0);
  const empty=known.filter(b=>b.available===0).length,low=known.filter(b=>b.available>0&&b.available<=2).length,good=known.filter(b=>b.available>2).length;
  const brokenStations=knownBroken.filter(b=>b.disabled>0).length;
+ const paired=knownBroken.filter(b=>b.available!==null), pairedAvailable=paired.reduce((v,b)=>v+b.available,0),pairedDisabled=paired.reduce((v,b)=>v+b.disabled,0);
  const arrivals=serviceBuses.flatMap(b=>b.arrivals||[]);
  const predicted=arrivals.filter(a=>a.minutes!==null),long=predicted.filter(a=>a.minutes>15).length;
  cards.append(
@@ -638,10 +639,10 @@ function renderServiceStatistics(){
  );
  $('servicesStatsTimestamp').textContent='Last refreshed: '+new Date().toLocaleTimeString()+' · Snapshot of available API responses.';
  $('servicesBiziChartNote').textContent=known.length?known.length+' stations with reported availability; '+(bikes.length-known.length)+' unknown.':'No reliable station availability counts yet.';
- $('servicesBreakdownNote').textContent=knownBroken.length?'Reported out-of-service bicycles at '+knownBroken.length+' stations; '+(bikes.length-knownBroken.length)+' stations do not report breakdowns. Values may cover different station subsets.':'Breakdown counts are not published by the current source. This is unknown, not zero.';
+ $('servicesBreakdownNote').textContent=paired.length?'Available vs broken bikes in the same '+paired.length+' stations reporting both counts. '+(bikes.length-paired.length)+' stations excluded for missing data.':'No stations report both available and broken bike counts. Unknown is not zero.';
  $('servicesBusChartNote').textContent=predicted.length?predicted.length+' known line-level predictions across '+serviceBuses.filter(b=>(b.arrivals||[]).some(a=>a.minutes!==null)).length+' stops. '+serviceBusErrors+' request errors.':'No verified line-level arrival times yet; this does not imply zero long waits.';
  serviceChart('servicesBiziChart','doughnut',['3+ bikes','1–2 bikes','Empty'],[good,low,empty],['#18875b','#e9a52f','#d94749']);
- serviceChart('servicesBreakdownChart','bar',['Available bikes','Reported broken bikes'],[available,disabled],['#18875b','#e9a52f']);
+ serviceChart('servicesBreakdownChart','bar',paired.length?['Available bikes','Reported broken bikes']:['No comparable data'],paired.length?[pairedAvailable,pairedDisabled]:[0],paired.length?['#18875b','#e9a52f']:['#a6b2c1']);
  serviceChart('servicesBusChart','bar',['0–5 min','6–15 min','>15 min'],[predicted.filter(a=>a.minutes<=5).length,predicted.filter(a=>a.minutes>5&&a.minutes<=15).length,long],['#18875b','#4274c7','#d94749']);
 }
 
@@ -885,7 +886,8 @@ async function loadVisibleBusEtas(){
   }
  }));
  serviceBusRequesting=false;
- serviceBusStatus=serviceBuses.length+' stops · '+serviceBusSuccess+' arrivals received · '+serviceBusNoPrediction+' responses without ETA · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();renderServiceStatistics();serviceStatus();
+ const visibleStops=serviceBuses.filter(st=>st.id.startsWith('tuzsa-')&&bounds.contains(st.coords));
+ serviceBusStatus=serviceBuses.length+' stops · '+visibleStops.filter(st=>st.checked>0).length+'/'+visibleStops.length+' visible checked · '+serviceBusSuccess+' stops with ETA · '+serviceBusNoPrediction+' responses without ETA · '+serviceBusErrors+' request errors'+(serviceBusSuccess===0?' · no confirmed live times yet':'');drawServicesBus();renderServiceStatistics();serviceStatus();
 }
 function startServices(){
  if(!servicesMap){
