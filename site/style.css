@@ -315,3 +315,7 @@ header #new.compactNew{display:inline-flex;align-items:center;justify-content:ce
  header #logout{max-width:none}
 }
 #servicesMap .servicesBusLabel span{font-size:24px;line-height:1}
+
+/* Bus stop icons: readable on mobile, while Bizi stations remain on top. */
+#servicesMap .servicesBusLabel{width:42px!important;height:42px!important;display:flex!important;align-items:center;justify-content:center;pointer-events:none!important;background:transparent!important;border:0!important}
+#servicesMap .servicesBusLabel span{font-size:26px!important;line-height:1!important;pointer-events:none!important;filter:drop-shadow(0 1px 2px white)}
