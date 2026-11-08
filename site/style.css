@@ -300,3 +300,7 @@ header #new.compactNew{display:inline-flex;align-items:center;justify-content:ce
 #servicesMap .leaflet-marker-pane .serviceMarker-bike{background:transparent!important;border:0!important;overflow:visible!important}
 #servicesMap .leaflet-marker-pane .serviceMarker-bike .servicePin.bike{background-color:var(--pin-color)!important;opacity:1!important;border:2px solid #fff!important;border-radius:11px!important;position:relative;z-index:2}
 #servicesMap .leaflet-marker-pane .serviceMarker-bike .serviceRepair{position:absolute;z-index:3}
+
+/* Bus stations: readable bus pictogram, with separate 46 px touch targets in JS. */
+#servicesMap .servicesBusLabel{display:flex;align-items:center;justify-content:center;background:transparent!important;border:0!important;pointer-events:none!important;filter:drop-shadow(0 1px 2px #ffffff)}
+#servicesMap .servicesBusLabel span{font-size:19px;line-height:1;pointer-events:none!important}
