@@ -73,7 +73,7 @@ window.__servicesE2E = {
     document.getElementById('headerToolbar').classList.remove('hidden');
     window.__servicesE2E.open();
   });
-  await expect(page.locator('#servicesMap .leaflet-map-pane')).toBeVisible();
+  await expect(page.locator('#servicesMap.leaflet-container')).toBeVisible();
   await expect(page.locator('#servicesStatus')).toContainText('2 arrivals received');
 }
 
