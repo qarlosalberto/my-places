@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -143,12 +142,12 @@ test('Services layout fits narrow phones without toolbar overlap or missing map'
       mapHeight: map.height,
       pickerRight: picker.right,
       refreshLeft: refresh.left,
-      tabsBelowAccount: tab.top > account.bottom - 10 || tab.right <= account.left
+      tabDoesNotOverlapAccount: tab.bottom <= account.top || tab.top >= account.bottom || tab.right <= account.left || tab.left >= account.right
     };
   });
   expect(layout.mapWidth).toBeGreaterThan(250);
   expect(layout.mapHeight).toBeGreaterThan(350);
   expect(layout.pickerRight).toBeLessThanOrEqual(layout.refreshLeft + 1);
   expect(layout.pageWidth).toBeLessThanOrEqual(layout.viewportWidth + 2);
-  expect(layout.tabsBelowAccount).toBeTruthy();
+  expect(layout.tabDoesNotOverlapAccount).toBeTruthy();
 });
