@@ -142,6 +142,22 @@ test('bus arrivals from destinos/primero are red over 15 minutes, blue otherwise
 
 });
 
+test('bus stops with known ETAs remain visible at wider zoom levels 13 and 12', async ({ page }) => {
+  await startMockedServices(page);
+  for (const [zoom, radius] of [[13, 14], [12, 10]]) {
+    await page.evaluate(z => window.__servicesE2E.map().setZoom(z, { animate: false }), zoom);
+    await expect.poll(() => page.evaluate(r =>
+      window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === r).length, radius
+    )).toBe(2);
+  }
+  await page.evaluate(() => window.__servicesE2E.map().setZoom(11, { animate: false }));
+  await expect.poll(() => page.evaluate(() => window.__servicesE2E.busLayer().getLayers().length)).toBe(0);
+  await page.evaluate(() => window.__servicesE2E.map().setZoom(14, { animate: false }));
+  await expect.poll(() => page.evaluate(() =>
+    window.__servicesE2E.busLayer().getLayers().filter(x => x.options?.radius === 22).length
+  )).toBe(2);
+});
+
 test('a failed municipal ETA request never claims a live arrival or colors it red', async ({ page }) => {
   await page.route('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', route =>
     route.fulfill({ path: leafletJs, contentType: 'application/javascript' }));
