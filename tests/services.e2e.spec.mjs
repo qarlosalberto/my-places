@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const leafletJs = require.resolve('leaflet/dist/leaflet.js');
 const leafletCss = require.resolve('leaflet/dist/leaflet.css');
-const chartJs = require.resolve('chart.js/dist/chart.umd.js');
+const chartJs = join(dirname(require.resolve('chart.js')), 'chart.umd.js');
 const API = 'https://www.zaragoza.es/sede/servicio/urbanismo-infraestructuras/transporte-urbano/poste-autobus';
 const GBFS = 'https://zaragoza.publicbikesystem.net/customer/gbfs/v3.0/';
 const json = data => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(data) });
