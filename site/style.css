@@ -288,3 +288,10 @@ header #new.compactNew{display:inline-flex;align-items:center;justify-content:ce
  #servicesRefresh{min-width:44px;font-size:22px}
  #servicesMap{min-height:340px}
 }
+
+/* Services: distinguish Bizi stations from bus stops on crowded city maps. */
+#servicesMap .serviceMarker.serviceMarker-bike{background:transparent!important;border:0!important;overflow:visible!important}
+#servicesMap .serviceMarker-bike .servicePin{position:relative;display:flex!important;align-items:center;justify-content:center;width:36px!important;height:36px!important;color:white!important;border:2px solid #fff!important;box-shadow:0 2px 7px #16385870!important;font-size:15px!important;font-weight:800!important}
+#servicesMap .serviceMarker-bike .serviceRepair{z-index:3;white-space:nowrap}
+#servicesMap .leaflet-overlay-pane{pointer-events:none}
+#servicesMap .leaflet-overlay-pane .leaflet-interactive{pointer-events:auto}
