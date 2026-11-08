@@ -295,3 +295,8 @@ header #new.compactNew{display:inline-flex;align-items:center;justify-content:ce
 #servicesMap .serviceMarker-bike .serviceRepair{z-index:3;white-space:nowrap}
 #servicesMap .leaflet-overlay-pane{pointer-events:none}
 #servicesMap .leaflet-overlay-pane .leaflet-interactive{pointer-events:auto}
+
+/* Explicit Bizi colors: avoid inherited Leaflet marker styles or old grey marker rules. */
+#servicesMap .leaflet-marker-pane .serviceMarker-bike{background:transparent!important;border:0!important;overflow:visible!important}
+#servicesMap .leaflet-marker-pane .serviceMarker-bike .servicePin.bike{background-color:var(--pin-color)!important;opacity:1!important;border:2px solid #fff!important;border-radius:11px!important;position:relative;z-index:2}
+#servicesMap .leaflet-marker-pane .serviceMarker-bike .serviceRepair{position:absolute;z-index:3}
