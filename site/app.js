@@ -115,6 +115,9 @@ function render(){
  else if(coords.length)map.fitBounds(coords,{padding:[35,35],maxZoom:14})
 }
 let servicesMap=null,servicesBiziLayer=null,servicesBusLayer=null,servicesStarted=false;
+const persistentBusMarkers=new Map();
+function clearBusMarkers(){servicesBusLayer?.clearLayers();persistentBusMarkers.clear()}
+
 function selectMainTab(tab){
  const service=tab==='services';
  hide('servicesPanel',!service);hide('mapPanel',tab!=='map');hide('listPanel',tab!=='list');
@@ -744,24 +747,37 @@ function busId(obj){
  return numeric?'tuzsa-'+numeric[0]:'';
 }
 function drawServicesBus(){
- if(!servicesBusLayer)return;servicesBusLayer.clearLayers();
- if(!servicesEnabled('bus'))return;
+ if(!servicesBusLayer)return;
+ if(!servicesEnabled('bus')){clearBusMarkers();return}
  const bounds=servicesMap?.getBounds(),detailZoom=servicesMap?.getZoom()>=14;
+ const active=new Set();
  for(const st of serviceBuses){
-  if(!st.coords)continue;
-  // At wider zoom levels, individual bus stop markers would obscure the Bizi stations.
-  if(!detailZoom)continue;
-  const inView=bounds?.pad(.2).contains(st.coords);
-  if(!inView)continue;
-  const eta=detailZoom&&inView?st.eta:null;
-  const color=eta===null?'#3f84c5':eta>15?'#d94749':'#4274c7';
-  // Large visible bus icon, plus an invisible ~44 px touch target for mobile.
-  // Both remain in a low pane so Bizi stations are always in front.
-  const marker=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:eta===null?19:22,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?3:2.5,fillColor:color,fillOpacity:eta===null?.17:.94,interactive:false}).addTo(servicesBusLayer);
-  const label=L.marker(st.coords,{pane:'servicesBusPane',interactive:false,icon:L.divIcon({className:'servicesBusLabel',html:'<span aria-hidden="true">🚌</span>',iconSize:[42,42],iconAnchor:[21,21]})}).addTo(servicesBusLayer);
+  if(!st.coords||!detailZoom||!bounds?.pad(.2).contains(st.coords))continue;
+  active.add(st.id);
+  const eta=st.eta, color=eta===null?'#3f84c5':eta>15?'#d94749':'#4274c7';
+  const shape={radius:eta===null?19:22,color:eta===null?'#3f84c5':'#ffffff',weight:eta===null?3:2.5,fillColor:color,fillOpacity:eta===null?.17:.94};
   const lines=['Next arrival: '+(eta===null?'Not available':eta+' min'),'Threshold: more than 15 min'];
-  const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:34,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
-  tap.bindPopup(servicePopup('🚌 '+st.name,lines)).addTo(servicesBusLayer);
+  let entry=persistentBusMarkers.get(st.id);
+  if(!entry){
+   const ring=L.circleMarker(st.coords,{pane:'servicesBusPane',...shape,interactive:false}).addTo(servicesBusLayer);
+   const label=L.marker(st.coords,{pane:'servicesBusPane',interactive:false,icon:L.divIcon({className:'servicesBusLabel',html:'<span aria-hidden="true">🚌</span>',iconSize:[42,42],iconAnchor:[21,21]})}).addTo(servicesBusLayer);
+   const tap=L.circleMarker(st.coords,{pane:'servicesBusPane',radius:34,color:'#000',opacity:0,weight:0,fillColor:'#000',fillOpacity:.001,interactive:true});
+   tap.bindPopup(servicePopup('🚌 '+st.name,lines),{autoPan:false}).addTo(servicesBusLayer);
+   entry={ring,label,tap,eta};
+   persistentBusMarkers.set(st.id,entry);
+  }else if(entry.eta!==eta){
+   entry.ring.setStyle(shape);
+   entry.ring.setRadius(shape.radius);
+   entry.tap.setPopupContent(servicePopup('🚌 '+st.name,lines));
+   entry.eta=eta;
+  }
+ }
+ for(const [id,entry] of persistentBusMarkers){
+  if(active.has(id))continue;
+  // Keep a selected stop alive during map movement so its open popup persists.
+  if(entry.tap.isPopupOpen())continue;
+  servicesBusLayer.removeLayer(entry.ring);servicesBusLayer.removeLayer(entry.label);servicesBusLayer.removeLayer(entry.tap);
+  persistentBusMarkers.delete(id);
  }
 }
 async function loadServicesBuses(force=false){
@@ -779,7 +795,7 @@ async function loadServicesBuses(force=false){
   }
   if(!all.length)throw Error('No bus stops found');
   serviceBuses=all;serviceBusFetched=Date.now();serviceBusStatus=all.length+' stops · zoom in for arrivals';drawServicesBus();loadVisibleBusEtas();
- }catch(e){serviceBusStatus='Unavailable ('+e.message+')';serviceBuses=[];servicesBusLayer?.clearLayers()}
+ }catch(e){serviceBusStatus='Unavailable ('+e.message+')';serviceBuses=[];clearBusMarkers()}
  serviceStatus();
 }
 async function loadVisibleBusEtas(){
@@ -819,7 +835,7 @@ function startServices(){
 }
 function refreshServices(force){
  if(servicesEnabled('bizi'))loadServicesBizi(force);else servicesBiziLayer?.clearLayers();
- if(servicesEnabled('bus'))loadServicesBuses(force);else servicesBusLayer?.clearLayers();
+ if(servicesEnabled('bus'))loadServicesBuses(force);else clearBusMarkers();
  serviceStatus();
 }
 function syncServiceSelection(){
