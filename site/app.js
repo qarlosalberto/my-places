@@ -1,4 +1,5 @@
 import {firebaseConfig} from './firebase-config-v2.js';
+import {isValidPlace,googleMapsPlaceUrl,placesToKml} from './google-maps.mjs';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
 import {getFirestore,collection,doc,getDoc,onSnapshot,writeBatch,serverTimestamp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
@@ -85,11 +86,15 @@ function relevant(){const q=val('search').toLowerCase();return places.filter(p=>
  (p.map===val('activeMap'))&&(!val('filterGroup')||p.group===val('filterGroup'))&&
  (!val('filterRating')||p.rating===val('filterRating'))&&(!val('filterSize')||(p.size||"Doesn't matter")===val('filterSize'))&&(!val('filterVisibility')||(p.visibility||'Not sure')===val('filterVisibility')))}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',render);
+function googleMapsLink(p,label='Open in Google Maps'){
+ const link=document.createElement('a');link.className='mapLink';link.textContent=label;
+ link.href=googleMapsPlaceUrl(p);link.target='_blank';link.rel='noopener noreferrer';return link;
+}
 function placeFacts(p){const wrap=document.createElement('div');wrap.className='placeFacts';for(const [icon,label,value] of [['★','Rating',p.rating||'Good'],['↔','Size',p.size||"Doesn't matter"],['👁','Visibility',p.visibility||'Not sure']]){const item=document.createElement('span');item.className='placeFact';item.title=label;const symbol=document.createElement('span');symbol.className='factIcon';symbol.textContent=icon;symbol.setAttribute('aria-hidden','true');item.append(symbol,document.createTextNode(label+': '+value));wrap.append(item)}return wrap}
 function render(){
  const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');hide('mapPicker',available.length<=1);if(available.includes(pendingMapSelection))pendingMapSelection='';
  const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('activeMap')),'All groups');$('filterGroup').value=gg&&groups(val('activeMap')).includes(gg)?gg:'';
- const items=relevant();$('count').textContent=items.length+' places';
+ const items=relevant();$('count').textContent=items.length+' places';$('exportKml').disabled=!items.some(isValidPlace);
  $('cards').replaceChildren();if(!items.length)$('cards').append(Object.assign(document.createElement('p'),{textContent:'No places match your filters.'}));
  for(const p of items){let card=document.createElement('article');card.className='card';
  const info=document.createElement('div');info.className='meta';info.textContent=(p.map||'Default map')+' / '+(p.group||'No group');
@@ -97,7 +102,7 @@ function render(){
  const facts=placeFacts(p);
  const meta=document.createElement('p');meta.className='meta';meta.textContent=Number(p.lat).toFixed(5)+', '+Number(p.lng).toFixed(5);
  const edit=document.createElement('button');edit.textContent='View / Edit';edit.onclick=()=>openEditor(p);
- card.append(info,h,facts);if(p.description)card.append(desc);card.append(meta);if(p.photoExists){const img=document.createElement('img');img.alt='Place photo';card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}card.append(edit);$('cards').append(card)}
+ card.append(info,h,facts);if(p.description)card.append(desc);card.append(meta);if(p.photoExists){const img=document.createElement('img');img.alt='Place photo';card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}const actions=document.createElement('div');actions.className='cardActions';if(isValidPlace(p))actions.append(googleMapsLink(p));actions.append(edit);card.append(actions);$('cards').append(card)}
  if(!map)return;markers.clearLayers();let coords=[];
  items.forEach(p=>{if(!Number.isFinite(Number(p.lat))||!Number.isFinite(Number(p.lng)))return;let point=[Number(p.lat),Number(p.lng)];coords.push(point);let dot=L.circleMarker(point,{radius:9,color:p.rating==='Perfect'?'#149667':p.rating==='Bad'?'#ce4961':'#286bca',fillOpacity:.85});
  const preview=document.createElement('div');preview.className='placeHover';
@@ -107,7 +112,11 @@ function render(){
  if(p.photoExists){const img=document.createElement('img');img.alt='Photo of '+(p.title||'place');img.loading='lazy';preview.append(img);
  getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{img.remove()})}
  dot.bindTooltip(preview,{direction:'top',offset:[0,-10],opacity:1,className:'placeHoverTooltip',interactive:false});
- dot.on('click',()=>{if(window.matchMedia('(hover: none)').matches){dot.openTooltip()}else{openEditor(p)}});
+ const popup=document.createElement('div');popup.className='placePopup';const popupTitle=document.createElement('strong');popupTitle.textContent=p.title||'Untitled place';popup.append(popupTitle);
+ const popupActions=document.createElement('div');popupActions.className='cardActions';if(isValidPlace(p))popupActions.append(googleMapsLink(p));
+ const popupEdit=document.createElement('button');popupEdit.type='button';popupEdit.textContent='Edit';popupEdit.onclick=()=>{dot.closePopup();openEditor(p)};popupActions.append(popupEdit);popup.append(popupActions);
+ dot.bindPopup(popup,{maxWidth:300});
+ dot.on('click',()=>{if(window.matchMedia('(hover: none)').matches){dot.openPopup()}else{openEditor(p)}});
  dot.addTo(markers)});
  if(userPosition&&!locatedOnce){map.setView(userPosition,15);locatedOnce=true;return}
  if(userPosition)return;
@@ -308,6 +317,23 @@ $('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;if(val('lat
  else if(p&&$('removePhoto').checked)batch.delete(doc(db,'users',user.uid,'places',ref.id,'photos','main'));
  pendingMapSelection=cat;await batch.commit();photoUrls.delete(ref.id);stopPrecision(false);$('editor').close();toast('Place saved')}catch(x){err(x)}finally{save.disabled=false}};
 $('delete').onclick=async()=>{if(!selected||!confirm('Permanently delete this place?'))return;try{const b=writeBatch(db);let ref=doc(db,'users',user.uid,'places',selected.id);b.delete(ref);if(selected.photoExists)b.delete(doc(db,'users',user.uid,'places',selected.id,'photos','main'));await b.commit();stopPrecision(false);$('editor').close();toast('Place deleted')}catch(x){err(x)}};
+$('openGoogleMaps').onclick=()=>{
+ // Google Maps URLs cannot display an arbitrary collection of private markers.
+ // Google My Maps can import KML without granting this app access to Google Drive.
+ window.open('https://www.google.com/maps/d/','_blank','noopener,noreferrer');
+ toast('Export KML, then import the file into Google My Maps to view all your places.');
+};
+$('exportKml').onclick=()=>{
+ const items=relevant().filter(isValidPlace);
+ if(!items.length)return toast('No places with valid coordinates match these filters.');
+ const kml=placesToKml(items,val('activeMap')||'My Places');
+ const blob=new Blob([kml],{type:'application/vnd.google-earth.kml+xml;charset=utf-8'});
+ const url=URL.createObjectURL(blob),link=document.createElement('a');
+ const slug=(val('activeMap')||'places').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').slice(0,48)||'places';
+ link.href=url;link.download='my-places-'+slug+'.kml';document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),30000);
+ toast('KML exported: '+items.length+' places. Import it in Google My Maps.');
+};
 function csvEscape(s){const x=String(s??'');return /[",\r\n]/.test(x)?'"'+x.replaceAll('"','""')+'"':x}
 const columns=['lat','lng','title','description','rating','map','group','size','visibility'];
 $('export').onclick=()=>{const lines=[columns.join(','),...places.map(p=>columns.map(c=>csvEscape(p[c])).join(','))];let blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='my-places-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
