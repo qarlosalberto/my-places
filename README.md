@@ -9,6 +9,7 @@ Mobile-first, English-language place journal hosted with GitHub Pages.
 - Rating: Perfect / Good / Bad; size: Large / Small / Doesn't matter; visibility: Perfect / Good / Bad / Not sure.
 - Category → Group hierarchy and filters.
 - CSV import/export. When importing, matching coordinates (6 decimal places) can be preserved or overwritten. CSV does not include photos.
+- Google Maps: open each saved place directly via its precise coordinates. Export the currently selected map and filters as KML, then open Google My Maps and import the KML into a map to see all markers. KML includes labels, descriptions and metadata, but not photos; this import is manual and no Google Drive permissions are required.
 
 ## Configure
 1. In Firebase Authentication enable Google. Register a web application.
