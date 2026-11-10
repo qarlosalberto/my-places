@@ -15,7 +15,6 @@ SITE = ROOT / "site"
 PUBLIC_FILES = (
     "index.html",
     "app.js",
-    "google-maps.mjs",
     "style.css",
     "favicon.svg",
     "manifest.webmanifest",

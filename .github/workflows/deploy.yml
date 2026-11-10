@@ -21,7 +21,6 @@ jobs:
       - name: Validate static JavaScript and electoral data
         run: |
           node --input-type=module --check < site/app.js
-          node --check site/google-maps.mjs
           node --input-type=module --check < site/atlas.js
           node --input-type=module --check < site/trends.js
           python3 scripts/validate_atlas.py
