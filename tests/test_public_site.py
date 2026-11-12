@@ -26,6 +26,9 @@ class PublicSiteTests(unittest.TestCase):
             self.assertIn('<select id="size"><option>Large</option><option selected>Medium</option><option>Small</option>',html)
             self.assertIn('<select id="filterSize" aria-label="Size filter"><option value="">All sizes</option><option>Large</option><option>Medium</option><option>Small</option>',html)
             self.assertIn("(p?\"Doesn't matter\":'Medium')",js)
+            # Good is the initial visibility for new entries only; edits use their saved value.
+            self.assertIn('<select id="visibility"><option>Perfect</option><option selected>Good</option><option>Bad</option><option>Not sure</option>',html)
+            self.assertIn("$('visibility').value=p?(p.visibility||'Not sure'):'Good'",js)
             # CSV import remains compatible with previously saved Medium values.
             self.assertIn("'Large','Medium','Small'",js)
             self.assertIn("onAuthStateChanged",js)
