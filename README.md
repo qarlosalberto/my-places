@@ -6,7 +6,7 @@ Mobile-first, English-language place journal hosted with GitHub Pages.
 - Sign in with Google and access by invitation, using `invites/{email}` in Firestore.
 - Private data for each authorized Google account.
 - Map and list, GPS location, title, description, optional compressed photo.
-- Rating: Perfect / Good / Bad; size: Large / Small / Doesn't matter; visibility: Perfect / Good / Bad / Not sure.
+- Rating: Perfect / Good / Bad; size: Large / Medium / Small / Doesn't matter (Medium preselected for new places); visibility: Perfect / Good / Bad / Not sure.
 - Category → Group hierarchy and filters.
 - CSV import/export. When importing, matching coordinates (6 decimal places) can be preserved or overwritten. CSV does not include photos.
 
