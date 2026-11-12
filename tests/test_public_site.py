@@ -22,12 +22,12 @@ class PublicSiteTests(unittest.TestCase):
             self.assertIn('id="dashboard"',html)
             self.assertIn('id="login"',html)
             self.assertIn('id="map"',html)
-            # The size field and filter must offer only Large, Small and Doesn't matter.
-            self.assertNotIn('<option>Medium</option>',html)
-            self.assertIn('<select id="size"><option>Large</option><option>Small</option>',html)
-            self.assertIn('<select id="filterSize" aria-label="Size filter"><option value="">All sizes</option><option>Large</option><option>Small</option>',html)
-            # Legacy values remain importable from CSV and existing Firestore records.
-            self.assertIn("'Medium','Small'",js)
+            # New places start at Medium. Existing places retain their actual stored size.
+            self.assertIn('<select id="size"><option>Large</option><option selected>Medium</option><option>Small</option>',html)
+            self.assertIn('<select id="filterSize" aria-label="Size filter"><option value="">All sizes</option><option>Large</option><option>Medium</option><option>Small</option>',html)
+            self.assertIn("(p?\"Doesn't matter\":'Medium')",js)
+            # CSV import remains compatible with previously saved Medium values.
+            self.assertIn("'Large','Medium','Small'",js)
             self.assertIn("onAuthStateChanged",js)
             self.assertIn("invites",js)
             self.assertNotIn('id="home"',html)
