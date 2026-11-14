@@ -546,7 +546,7 @@ async function exportFilteredPdf(){
   text(t('My Places'),23,true,[27,63,109]);y+=26;
   lines(chosenMap,13,true,73,[38,91,163]);y+=3;
   const filters=[['Group','filterGroup'],['Rating','filterRating'],['Size','filterSize'],['Visibility','filterVisibility'],['Search','search']]
-   .filter(([,id])=>val(id)).map(([label,id])=>t(label)+': '+(id==='search'?val(id):displayEnum(val(id)))).join('  |  ');
+   .filter(([,id])=>val(id)).map(([label,id])=>t(label)+': '+(['filterRating','filterSize','filterVisibility'].includes(id)?displayEnum(val(id)):val(id))).join('  |  ');
   if(filters)lines(filters,9,false,105);
   lines(t('{count} places',{count:valid.length})+'  |  '+new Date().toLocaleDateString(locale),9);
   y+=10;
