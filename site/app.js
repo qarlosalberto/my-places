@@ -1,4 +1,5 @@
 import {firebaseConfig} from './firebase-config-v2.js';
+import {t,locale,displayEnum,errorMessage} from './i18n.mjs';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
 import {getFirestore,collection,doc,getDoc,onSnapshot,writeBatch,serverTimestamp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
@@ -8,7 +9,7 @@ let auth,db,user,places=[],unsubscribe=()=>{},selected=null,pending=[],photoData
 let precisionWatch=null,precisionTimeout=null,precisionStarted=0,bestFix=null,manualAdjusted=false,precisionMap=null,precisionMarker=null,accuracyMeters=null;
 let trackingWatch=null,latestTrackingFix=null;let titleManuallyEdited=false,addressSequence=0,lastAddressCall=0,lastResolvedAddress='',lastResolvedKey='',autoTitle='';const addressCache=new Map();
 const toast=s=>{let t=$('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',4500)};
-const err=e=>{console.error(e);toast(e.message||String(e))};
+const err=e=>{console.error(e);toast(errorMessage(e))};
 // Public deployment: only the personal markers app is active.
 // Election modules and their datasets remain in the repository for later activation.
 function showMarkers(){
@@ -51,7 +52,7 @@ async function migrateLegacyMaps(docs){
    }
    await batch.commit();
   }
-  toast('Existing categories have been mapped to Maps.');
+  toast(t('Existing categories have been mapped to Maps.'));
  }finally{migrationBusy=false}
 }
 
@@ -65,7 +66,7 @@ function initMap(){
   onAdd(){
    const container=L.DomUtil.create('div','leaflet-bar leaflet-control myLocationControl');
    const btn=L.DomUtil.create('button','myLocationControlButton',container);
-   btn.type='button';btn.title='Center on my location';btn.setAttribute('aria-label','Center on my location');
+   btn.type='button';btn.title=t('Center on my location');btn.setAttribute('aria-label',t('Center on my location'));
    btn.textContent='⌖';
    L.DomEvent.disableClickPropagation(container);
    L.DomEvent.disableScrollPropagation(container);
@@ -79,32 +80,32 @@ function initMap(){
 function categories(){return [...new Set(places.map(p=>p.map||p.category||'Default'))].sort()}
 function groups(cat){return [...new Set(places.filter(p=>!cat||(p.map||p.category||'Default')===cat).map(p=>p.group).filter(Boolean))].sort()}
 function refill(sel,options,label){const before=sel.value;sel.replaceChildren(new Option(label,''));options.forEach(s=>sel.add(new Option(s,s)));sel.value=options.includes(before)?before:''}
-function refreshGroupFilter(){refill($('filterGroup'),groups(val('activeMap')),'All groups');render()}
+function refreshGroupFilter(){refill($('filterGroup'),groups(val('activeMap')),t('All groups'));render()}
 $('activeMap').onchange=refreshGroupFilter;
 function relevant(){const q=val('search').toLowerCase();return places.filter(p=>(!q||[p.title,p.description,p.map,p.group].some(s=>String(s||'').toLowerCase().includes(q)))&&
  (p.map===val('activeMap'))&&(!val('filterGroup')||p.group===val('filterGroup'))&&
  (!val('filterRating')||p.rating===val('filterRating'))&&(!val('filterSize')||(p.size||"Doesn't matter")===val('filterSize'))&&(!val('filterVisibility')||(p.visibility||'Not sure')===val('filterVisibility')))}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',render);
-function placeFacts(p){const wrap=document.createElement('div');wrap.className='placeFacts';for(const [icon,label,value] of [['★','Rating',p.rating||'Good'],['↔','Size',p.size||"Doesn't matter"],['👁','Visibility',p.visibility||'Not sure']]){const item=document.createElement('span');item.className='placeFact';item.title=label;const symbol=document.createElement('span');symbol.className='factIcon';symbol.textContent=icon;symbol.setAttribute('aria-hidden','true');item.append(symbol,document.createTextNode(label+': '+value));wrap.append(item)}return wrap}
+function placeFacts(p){const wrap=document.createElement('div');wrap.className='placeFacts';for(const [icon,label,value] of [['★','Rating',p.rating||'Good'],['↔','Size',p.size||"Doesn't matter"],['👁','Visibility',p.visibility||'Not sure']]){const item=document.createElement('span');item.className='placeFact';item.title=t(label);const symbol=document.createElement('span');symbol.className='factIcon';symbol.textContent=icon;symbol.setAttribute('aria-hidden','true');item.append(symbol,document.createTextNode(t(label)+': '+displayEnum(value)));wrap.append(item)}return wrap}
 function render(){
- const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,'Select a map');$('activeMap').value=available.includes(previous)?previous:(available[0]||'');hide('mapPicker',available.length<=1);if(available.includes(pendingMapSelection))pendingMapSelection='';
- const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('activeMap')),'All groups');$('filterGroup').value=gg&&groups(val('activeMap')).includes(gg)?gg:'';
- const items=relevant();$('count').textContent=items.length+' places';
- $('cards').replaceChildren();if(!items.length)$('cards').append(Object.assign(document.createElement('p'),{textContent:'No places match your filters.'}));
+ const previous=pendingMapSelection||$('activeMap').value;const available=categories();refill($('activeMap'),available,t('Select a map'));$('activeMap').value=available.includes(previous)?previous:(available[0]||'');hide('mapPicker',available.length<=1);if(available.includes(pendingMapSelection))pendingMapSelection='';
+ const gg=$('filterGroup').value;refill($('filterGroup'),groups(val('activeMap')),t('All groups'));$('filterGroup').value=gg&&groups(val('activeMap')).includes(gg)?gg:'';
+ const items=relevant();$('count').textContent=t('{count} places',{count:items.length});
+ $('cards').replaceChildren();if(!items.length)$('cards').append(Object.assign(document.createElement('p'),{textContent:t('No places match your filters.')}));
  for(const p of items){let card=document.createElement('article');card.className='card';
- const info=document.createElement('div');info.className='meta';info.textContent=(p.map||'Default map')+' / '+(p.group||'No group');
+ const info=document.createElement('div');info.className='meta';info.textContent=(p.map||t('Default map'))+' / '+(p.group||t('No group'));
  const h=document.createElement('h3');h.textContent=p.title;const desc=document.createElement('p');desc.textContent=p.description||'';
  const facts=placeFacts(p);
  const meta=document.createElement('p');meta.className='meta';meta.textContent=Number(p.lat).toFixed(5)+', '+Number(p.lng).toFixed(5);
- const edit=document.createElement('button');edit.textContent='View / Edit';edit.onclick=()=>openEditor(p);
- card.append(info,h,facts);if(p.description)card.append(desc);card.append(meta);if(p.photoExists){const img=document.createElement('img');img.alt='Place photo';card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}card.append(edit);$('cards').append(card)}
+ const edit=document.createElement('button');edit.textContent=t('View / Edit');edit.onclick=()=>openEditor(p);
+ card.append(info,h,facts);if(p.description)card.append(desc);card.append(meta);if(p.photoExists){const img=document.createElement('img');img.alt=t('Place photo');card.insertBefore(img,card.firstChild);getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{})}card.append(edit);$('cards').append(card)}
  if(!map)return;markers.clearLayers();let coords=[];
  items.forEach(p=>{if(!Number.isFinite(Number(p.lat))||!Number.isFinite(Number(p.lng)))return;let point=[Number(p.lat),Number(p.lng)];coords.push(point);let dot=L.circleMarker(point,{radius:9,color:p.rating==='Perfect'?'#149667':p.rating==='Bad'?'#ce4961':'#286bca',fillOpacity:.85});
  const preview=document.createElement('div');preview.className='placeHover';
- const heading=document.createElement('strong');heading.textContent=p.title||'Untitled place';preview.append(heading);
- const detail=document.createElement('div');detail.className='placeHoverMeta';detail.textContent=p.group||'No group';preview.append(detail,placeFacts(p));
+ const heading=document.createElement('strong');heading.textContent=p.title||t('Untitled place');preview.append(heading);
+ const detail=document.createElement('div');detail.className='placeHoverMeta';detail.textContent=p.group||t('No group');preview.append(detail,placeFacts(p));
  if(p.description){const description=document.createElement('p');description.textContent=p.description;preview.append(description)}
- if(p.photoExists){const img=document.createElement('img');img.alt='Photo of '+(p.title||'place');img.loading='lazy';preview.append(img);
+ if(p.photoExists){const img=document.createElement('img');img.alt=t('Photo of')+' '+(p.title||t('place'));img.loading='lazy';preview.append(img);
  getPhoto(p).then(src=>{if(src)img.src=src}).catch(()=>{img.remove()})}
  dot.bindTooltip(preview,{direction:'top',offset:[0,-10],opacity:1,className:'placeHoverTooltip',interactive:false});
  dot.on('click',()=>{if(window.matchMedia('(hover: none)').matches){dot.openTooltip()}else{openEditor(p)}});
@@ -125,9 +126,9 @@ $('mapTab').onclick=()=>selectMainTab('map');
 $('listTab').onclick=()=>selectMainTab('list');
 const NEW_ENTRY='__myplaces_create_new__';
 function makeSelect(id,options,placeholder,choice='',newOption=''){
- const sel=$(id);sel.replaceChildren(new Option(placeholder,''));
+ const sel=$(id);sel.replaceChildren(new Option(t(placeholder),''));
  options.forEach(name=>sel.add(new Option(name,name)));
- if(newOption)sel.add(new Option(newOption,NEW_ENTRY));
+ if(newOption)sel.add(new Option(t(newOption),NEW_ENTRY));
  sel.value=choice||'';
  if(sel.selectedIndex===-1)sel.value='';
 }
@@ -141,7 +142,7 @@ function chooseGroups(choice=''){
  const newMap=val('category')===NEW_ENTRY;
  hide('newMapRow',!newMap);
  if(!newMap)$('newCategory').value='';
- makeSelect('group',newMap?[]:groups(val('category')),'No group',choice,'+ New group…');
+ makeSelect('group',newMap?[]:groups(val('category')),t('No group'),choice,'+ New group…');
  toggleNewGroup();
 }
 $('category').onchange=()=>{
@@ -157,12 +158,12 @@ function openEditor(p=null){
  // Show the editor immediately: a GPS or selector error must never block the modal.
  if(!dialog.open)dialog.showModal();
  try{
- stopPrecision(false);addressSequence++;lastResolvedAddress='';lastResolvedKey='';autoTitle='';titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=p?'Edit place':'New place';
+ stopPrecision(false);addressSequence++;lastResolvedAddress='';lastResolvedKey='';autoTitle='';titleManuallyEdited=Boolean(p?.title);selected=p;photoData=null;manualAdjusted=Boolean(p?.locationManual);accuracyMeters=typeof p?.accuracyMeters==='number'?p.accuracyMeters:null;$('placeForm').reset();$('dialogTitle').textContent=t(p?'Edit place':'New place');
  for(const id of ['title','lat','lng'])$(id).value=p?.[id]??'';
  $('rating').value=p?.rating||'Good';$('size').value=['Large','Medium','Small',"Doesn't matter"].includes(p?.size)?p.size:(p?"Doesn't matter":'Medium');$('visibility').value=p?(p.visibility||'Not sure'):'Good';
- const mapChoices=categories();makeSelect('category',mapChoices,'Select a map',p?.map||val('activeMap')||(!mapChoices.length?NEW_ENTRY:''),'+ New map…');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);hide('manualGpsControls',!p);hide('titleEntry',!p);hide('coordinateEntry',!p);hide('locationMapDetails',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('placeForm').querySelector('button[type=submit]').disabled=!p;if(p)initPrecisionMap();else{$('gpsStatus').textContent='Getting GPS position…';startPlaceGpsCapture()}
+ const mapChoices=categories();makeSelect('category',mapChoices,t('Select a map'),p?.map||val('activeMap')||(!mapChoices.length?NEW_ENTRY:''),'+ New map…');chooseGroups(p?.group||'');$('photoPreview').replaceChildren();$('removePhoto').checked=false;hide('removePhotoRow',!p?.photoExists);hide('delete',!p);hide('manualGpsControls',!p);hide('titleEntry',!p);hide('coordinateEntry',!p);hide('locationMapDetails',!p);$('gpsStatus').textContent='';$('addressStatus').textContent='';$('placeForm').querySelector('button[type=submit]').disabled=!p;if(p)initPrecisionMap();else{$('gpsStatus').textContent=t('Getting GPS position…');startPlaceGpsCapture()}
  if(p?.photoExists)getPhoto(p).then(src=>{if(src&&selected?.id===p.id){const img=new Image();img.src=src;$('photoPreview').append(img)}}).catch(err)
- }catch(error){console.error('Could not initialise place editor',error);$('gpsStatus').textContent='Could not load all place options. Close and reopen to retry.';err(error)}
+ }catch(error){console.error('Could not initialise place editor',error);$('gpsStatus').textContent=t('Could not load all place options. Close and reopen to retry.');err(error)}
 }
 $('new').addEventListener('click',event=>{event.preventDefault();openEditor()});$('close').onclick=()=>{$('editor').close();stopPrecision(false)};
 $('editor').addEventListener('close',()=>stopPrecision(false));
@@ -175,7 +176,7 @@ function updatePrecisionPosition(lat,lng,moveView=true){
  else {
   precisionMarker=L.marker(point,{draggable:true}).addTo(precisionMap);
   precisionMarker.on('dragstart',()=>{manualAdjusted=true;stopPrecision(true)});
-  precisionMarker.on('dragend',()=>{const ll=precisionMarker.getLatLng();manualAdjusted=true;accuracyMeters=null;updatePrecisionPosition(ll.lat,ll.lng,false);$('gpsStatus').textContent='Marker adjusted manually; GPS accuracy no longer applies.';lookupAddress(ll.lat,ll.lng)});
+  precisionMarker.on('dragend',()=>{const ll=precisionMarker.getLatLng();manualAdjusted=true;accuracyMeters=null;updatePrecisionPosition(ll.lat,ll.lng,false);$('gpsStatus').textContent=t('Marker adjusted manually; GPS accuracy no longer applies.');lookupAddress(ll.lat,ll.lng)});
  }
  if(moveView)precisionMap.setView(point,Math.max(precisionMap.getZoom(),16));
 }
@@ -196,31 +197,31 @@ for(const id of ['lat','lng'])$(id).addEventListener('change',()=>{
  const lat=Number(val('lat')),lng=Number(val('lng'));
  if(Number.isFinite(lat)&&Math.abs(lat)<=90&&Number.isFinite(lng)&&Math.abs(lng)<=180){
   manualAdjusted=true;accuracyMeters=null;stopPrecision(false);updatePrecisionPosition(lat,lng);
-  $('gpsStatus').textContent='Coordinates changed manually.';lookupAddress(lat,lng);
+  $('gpsStatus').textContent=t('Coordinates changed manually.');lookupAddress(lat,lng);
  }
 });
 function useTrackingFix(){
  const fix=recentTrackingFix();
- if(!fix){$('gpsStatus').textContent='Waiting for a fresh tracking position…';return false}
+ if(!fix){$('gpsStatus').textContent=t('Waiting for a fresh tracking position…');return false}
  bestFix=fix;manualAdjusted=false;accuracyMeters=fix.coords.accuracy;
  updatePrecisionPosition(fix.coords.latitude,fix.coords.longitude);
- $('gpsStatus').textContent='Tracking GPS fix: ±'+Math.round(accuracyMeters)+' m · Ready to save.';
+ $('gpsStatus').textContent=t('Tracking GPS fix: ±{accuracy} m · Ready to save.',{accuracy:Math.round(accuracyMeters)});
  lookupAddress(fix.coords.latitude,fix.coords.longitude);
  return true;
 }
 function stopPrecision(show=true){
  if(precisionWatch!==null){navigator.geolocation?.clearWatch(precisionWatch);precisionWatch=null}
  if(precisionTimeout!==null){clearTimeout(precisionTimeout);precisionTimeout=null}
- $('gps').disabled=false;$('gps').textContent='⌖ Capture precise location';hide('stopGps',true);
- if(show&&bestFix){$('gpsStatus').textContent='Best GPS estimate: ±'+Math.round(bestFix.coords.accuracy)+' m. Drag marker to refine.';lookupAddress(bestFix.coords.latitude,bestFix.coords.longitude)};
+ $('gps').disabled=false;$('gps').textContent=t('⌖ Capture precise location');hide('stopGps',true);
+ if(show&&bestFix){$('gpsStatus').textContent=t('Best GPS estimate: ±{accuracy} m. Drag marker to refine.',{accuracy:Math.round(bestFix.coords.accuracy)});lookupAddress(bestFix.coords.latitude,bestFix.coords.longitude)};
 }
 $('stopGps').onclick=()=>stopPrecision(true);
 function startPlaceGpsCapture(){
- if(!window.isSecureContext||!navigator.geolocation){$('gpsStatus').textContent='Location unavailable. Enable location services and use HTTPS.';return}
+ if(!window.isSecureContext||!navigator.geolocation){$('gpsStatus').textContent=t('Location unavailable. Enable location services and use HTTPS.');return}
  if(trackingWatch!==null&&useTrackingFix())return;
  stopPrecision(false);bestFix=null;manualAdjusted=false;accuracyMeters=null;precisionStarted=Date.now();
- $('gps').disabled=true;$('gps').textContent='⌖ Measuring…';hide('stopGps',false);
- $('gpsStatus').textContent='Looking for an accurate GPS fix (up to 30 seconds)…';
+ $('gps').disabled=true;$('gps').textContent=t('⌖ Measuring…');hide('stopGps',false);
+ $('gpsStatus').textContent=t('Looking for an accurate GPS fix (up to 30 seconds)…');
  precisionTimeout=setTimeout(()=>stopPrecision(true),30000);
  precisionWatch=navigator.geolocation.watchPosition(pos=>{
   if(!Number.isFinite(pos.coords.latitude)||!Number.isFinite(pos.coords.longitude)||!Number.isFinite(pos.coords.accuracy))return;
@@ -232,31 +233,31 @@ function startPlaceGpsCapture(){
   }
   const accuracy=Math.round(bestFix.coords.accuracy);
   const grade=accuracy<=5?'Excellent':accuracy<=15?'Good':'Low';
-  $('gpsStatus').textContent='Best accuracy: ±'+accuracy+' m ('+grade+'). Measuring… '+Math.min(30,Math.round((Date.now()-precisionStarted)/1000))+'/30 s';
+  $('gpsStatus').textContent=t('Best accuracy: ±{accuracy} m ({grade}). Measuring… {seconds}/30 s',{accuracy,grade:displayEnum(grade),seconds:Math.min(30,Math.round((Date.now()-precisionStarted)/1000))});
   if(accuracy<=5)stopPrecision(true);
  },e=>{
-  $('gpsStatus').textContent=e.code===1?'Location permission denied. Enable site location permission.':e.code===3?'GPS timed out. Try again outdoors.':e.message;
+  $('gpsStatus').textContent=t(e.code===1?'Location permission denied. Enable site location permission.':e.code===3?'GPS timed out. Try again outdoors.':'GPS unavailable. Try again.');
   stopPrecision(false);
  },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 }
 $('gps').onclick=startPlaceGpsCapture;
 
 $('title').addEventListener('input',()=>{titleManuallyEdited=Boolean(val('title'));autoTitle='';addressSequence++});
-$('clearTitle').onclick=()=>{$('title').value='';autoTitle='';titleManuallyEdited=false;addressSequence++;$('addressStatus').textContent='Enter your own title or capture a new position.';$('title').focus()};
+$('clearTitle').onclick=()=>{$('title').value='';autoTitle='';titleManuallyEdited=false;addressSequence++;$('addressStatus').textContent=t('Enter your own title or capture a new position.');$('title').focus()};
 async function lookupAddress(lat,lng){
  if(titleManuallyEdited||!Number.isFinite(Number(lat))||!Number.isFinite(Number(lng)))return;
  const key=Number(lat).toFixed(5)+','+Number(lng).toFixed(5);
  const seq=++addressSequence;
  lastResolvedAddress='';lastResolvedKey='';
- const apply=name=>{if(seq!==addressSequence||!$('editor').open)return;lastResolvedAddress=name.slice(0,160);lastResolvedKey=key;if(!titleManuallyEdited){$('title').value=lastResolvedAddress;autoTitle=lastResolvedAddress;$('addressStatus').textContent='Address from GPS · © OpenStreetMap contributors.'}};
+ const apply=name=>{if(seq!==addressSequence||!$('editor').open)return;lastResolvedAddress=name.slice(0,160);lastResolvedKey=key;if(!titleManuallyEdited){$('title').value=lastResolvedAddress;autoTitle=lastResolvedAddress;$('addressStatus').textContent=t('Address from GPS · © OpenStreetMap contributors.')}};
  if(addressCache.has(key)){const name=addressCache.get(key);if(name)apply(name);return}
- $('addressStatus').textContent='Looking up address…';
+ $('addressStatus').textContent=t('Looking up address…');
  try{
   const delay=Math.max(0,1100-(Date.now()-lastAddressCall));
   if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
   if(seq!==addressSequence||titleManuallyEdited)return;
   lastAddressCall=Date.now();
-  const url='https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+encodeURIComponent(lat)+'&lon='+encodeURIComponent(lng)+'&zoom=18&addressdetails=1';
+  const url='https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+encodeURIComponent(lat)+'&lon='+encodeURIComponent(lng)+'&zoom=18&addressdetails=1&accept-language='+encodeURIComponent(locale);
   const res=await fetch(url,{headers:{Accept:'application/json'}});
   if(!res.ok)throw Error('Address lookup unavailable');
   const data=await res.json();
@@ -265,8 +266,8 @@ async function lookupAddress(lat,lng){
   const town=a.city||a.town||a.village||a.municipality||a.county||'';
   const name=[street||data.name||'',town].filter(Boolean).join(', ')||data.display_name||'';
   addressCache.set(key,name||null);
-  if(name)apply(name);else if(seq===addressSequence)$('addressStatus').textContent='Address unavailable; coordinates will be used as title.';
- }catch(e){if(seq===addressSequence)$('addressStatus').textContent='Address lookup unavailable; coordinates will be used as title.'}
+  if(name)apply(name);else if(seq===addressSequence)$('addressStatus').textContent=t('Address unavailable; coordinates will be used as title.');
+ }catch(e){if(seq===addressSequence)$('addressStatus').textContent=t('Address lookup unavailable; coordinates will be used as title.')}
 }
 // Decode pixels and re-encode in a new canvas. EXIF/GPS/camera metadata from the source is never copied.
 async function compress(f){
@@ -276,28 +277,28 @@ async function compress(f){
   const c=document.createElement('canvas');
   c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));
   const ctx=c.getContext('2d',{alpha:false});
-  if(!ctx)throw Error('Image processing unavailable');
+  if(!ctx)throw Error(t('Image processing unavailable'));
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,c.width,c.height);
   ctx.drawImage(img,0,0,c.width,c.height);
   for(const quality of [.7,.5,.35,.2]){
    const data=c.toDataURL('image/jpeg',quality);
    if(data.length<210000)return data;
   }
-  throw Error('Image too large after compression. Choose another image.');
+  throw Error(t('Image too large after compression. Choose another image.'));
  }finally{img.close()}
 }
-async function selectedPhoto(e){const file=e.target.files?.[0];if(!file)return;try{photoData=await compress(file);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;img.alt='Selected place photo';$('photoPreview').append(img);$('removePhoto').checked=false;toast('Photo ready to save')}catch(x){err(x)}finally{e.target.value=''}}
+async function selectedPhoto(e){const file=e.target.files?.[0];if(!file)return;try{photoData=await compress(file);$('photoPreview').replaceChildren();const img=new Image();img.src=photoData;img.alt=t('Selected place photo');$('photoPreview').append(img);$('removePhoto').checked=false;toast(t('Photo ready to save'))}catch(x){err(x)}finally{e.target.value=''}}
 $('takePhoto').onclick=()=>$('cameraPhoto').click();
 $('choosePhoto').onclick=()=>$('photo').click();
 $('cameraPhoto').onchange=selectedPhoto;
 $('photo').onchange=selectedPhoto;
 async function getPhoto(p){if(photoUrls.has(p.id))return photoUrls.get(p.id);const snap=await getDoc(doc(db,'users',user.uid,'places',p.id,'photos','main'));const src=snap.exists()?snap.data().image:null;photoUrls.set(p.id,src);return src}
-$('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;if(val('lat')===''||val('lng')===''){toast('Waiting for GPS position.');return}const lat=Number(val('lat')),lng=Number(val('lng'));if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Invalid coordinates');
+$('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;if(val('lat')===''||val('lng')===''){toast(t('Waiting for GPS position.'));return}const lat=Number(val('lat')),lng=Number(val('lng'));if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast(t('Invalid coordinates'));
  const mapChoice=val('category'),groupChoice=val('group');
  const cat=mapChoice===NEW_ENTRY?val('newCategory'):mapChoice;
  const group=groupChoice===NEW_ENTRY?val('newGroup'):groupChoice;
- if(!cat)return toast(mapChoice===NEW_ENTRY?'Enter a new map name.':'Select a map.');
- if(groupChoice===NEW_ENTRY&&!group)return toast('Enter a new group name.');
+ if(!cat)return toast(t(mapChoice===NEW_ENTRY?'Enter a new map name.':'Select a map.'));
+ if(groupChoice===NEW_ENTRY&&!group)return toast(t('Enter a new group name.'));
  const titleKey=lat.toFixed(5)+','+lng.toFixed(5);if(!titleManuallyEdited&&!addressCache.has(titleKey)&&lastResolvedKey!==titleKey)await lookupAddress(lat,lng);
  const fallbackTitle=addressCache.get(titleKey)||(lastResolvedKey===titleKey?lastResolvedAddress:'')||lat.toFixed(7)+', '+lng.toFixed(7);const finalTitle=(titleManuallyEdited&&val('title'))?val('title'):fallbackTitle;$('title').value=finalTitle;
  const save=$('placeForm').querySelector('button[type=submit]');save.disabled=true;
@@ -306,20 +307,20 @@ $('placeForm').onsubmit=async e=>{e.preventDefault();if(!user)return;if(val('lat
  if(p)batch.update(ref,fields);else batch.set(ref,{...fields,createdAt:serverTimestamp()});
  if(photoData)batch.set(doc(db,'users',user.uid,'places',ref.id,'photos','main'),{image:photoData,updatedAt:serverTimestamp()});
  else if(p&&$('removePhoto').checked)batch.delete(doc(db,'users',user.uid,'places',ref.id,'photos','main'));
- pendingMapSelection=cat;await batch.commit();photoUrls.delete(ref.id);stopPrecision(false);$('editor').close();toast('Place saved')}catch(x){err(x)}finally{save.disabled=false}};
-$('delete').onclick=async()=>{if(!selected||!confirm('Permanently delete this place?'))return;try{const b=writeBatch(db);let ref=doc(db,'users',user.uid,'places',selected.id);b.delete(ref);if(selected.photoExists)b.delete(doc(db,'users',user.uid,'places',selected.id,'photos','main'));await b.commit();stopPrecision(false);$('editor').close();toast('Place deleted')}catch(x){err(x)}};
+ pendingMapSelection=cat;await batch.commit();photoUrls.delete(ref.id);stopPrecision(false);$('editor').close();toast(t('Place saved'))}catch(x){err(x)}finally{save.disabled=false}};
+$('delete').onclick=async()=>{if(!selected||!confirm(t('Permanently delete this place?')))return;try{const b=writeBatch(db);let ref=doc(db,'users',user.uid,'places',selected.id);b.delete(ref);if(selected.photoExists)b.delete(doc(db,'users',user.uid,'places',selected.id,'photos','main'));await b.commit();stopPrecision(false);$('editor').close();toast(t('Place deleted'))}catch(x){err(x)}};
 function csvEscape(s){const x=String(s??'');return /[",\r\n]/.test(x)?'"'+x.replaceAll('"','""')+'"':x}
 const columns=['lat','lng','title','description','rating','map','group','size','visibility'];
 $('export').onclick=()=>{const lines=[columns.join(','),...places.map(p=>columns.map(c=>csvEscape(p[c])).join(','))];let blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='my-places-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
 function parseCSV(text){text=text.replace(/^\uFEFF/,'');let rows=[],row=[],cell='',quote=false;for(let i=0;i<text.length;i++){let c=text[i];if(quote){if(c==='"'&&text[i+1]==='"'){cell+='"';i++}else if(c==='"')quote=false;else cell+=c}else if(c==='"')quote=true;else if(c===','){row.push(cell);cell=''}else if(c==='\n'){row.push(cell.replace(/\r$/,''));rows.push(row);row=[];cell=''}else cell+=c}if(quote)throw Error('Unclosed quoted field');if(row.length||cell){row.push(cell);rows.push(row)}return rows}
-$('csvFile').onchange=async e=>{pending=[];try{const f=e.target.files[0];if(!f)return;const rows=parseCSV(await f.text());if(rows.length<2)throw Error('CSV has no records');const headers=rows.shift().map(s=>s.trim().toLowerCase());for(const required of ['lat','lng','title'])if(!headers.includes(required))throw Error('Missing required column: '+required);
- let seen=new Set(),repeats=0;for(const row of rows){if(row.length===1&&!row[0])continue;const p=Object.fromEntries(headers.map((h,i)=>[h,row[i]??'']));p.map=p.map||p.category||'Default';p.lat=Number(p.lat);p.lng=Number(p.lng);if(!Number.isFinite(p.lat)||!Number.isFinite(p.lng)||Math.abs(p.lat)>90||Math.abs(p.lng)>180||!p.title?.trim())throw Error('Invalid row '+(rows.indexOf(row)+2));if(p.title.length>160||String(p.description||'').length>1500||String(p.map||p.category||'').length>60||String(p.group||'').length>60)throw Error('Text too long');let k=key(p);if(seen.has(k)){repeats++;continue}seen.add(k);pending.push({lat:p.lat,lng:p.lng,title:p.title,description:p.description||'',rating:['Perfect','Good','Bad'].includes(p.rating)?p.rating:'Good',map:p.map||p.category||'Default',group:p.group||'',size:['Large','Medium','Small',"Doesn't matter"].includes(p.size)?p.size:"Doesn't matter",visibility:['Perfect','Good','Bad','Not sure'].includes(p.visibility)?p.visibility:'Not sure'})}
- let match=new Set(places.map(key));let duplicates=pending.filter(p=>match.has(key(p))).length;hide('importPanel',false);$('importSummary').textContent=pending.length+' valid rows · '+duplicates+' matching existing coordinates · '+(pending.length-duplicates)+' new · '+repeats+' repeated CSV rows ignored.'}catch(x){err(x);hide('importPanel',true)}};
+$('csvFile').onchange=async e=>{pending=[];try{const f=e.target.files[0];if(!f)return;const rows=parseCSV(await f.text());if(rows.length<2)throw Error(t('CSV has no records'));const headers=rows.shift().map(s=>s.trim().toLowerCase());for(const required of ['lat','lng','title'])if(!headers.includes(required))throw Error(t('Missing required column: {column}',{column:required}));
+ let seen=new Set(),repeats=0;for(const row of rows){if(row.length===1&&!row[0])continue;const p=Object.fromEntries(headers.map((h,i)=>[h,row[i]??'']));p.map=p.map||p.category||'Default';p.lat=Number(p.lat);p.lng=Number(p.lng);if(!Number.isFinite(p.lat)||!Number.isFinite(p.lng)||Math.abs(p.lat)>90||Math.abs(p.lng)>180||!p.title?.trim())throw Error(t('Invalid row {row}',{row:rows.indexOf(row)+2}));if(p.title.length>160||String(p.description||'').length>1500||String(p.map||p.category||'').length>60||String(p.group||'').length>60)throw Error(t('Text too long'));let k=key(p);if(seen.has(k)){repeats++;continue}seen.add(k);pending.push({lat:p.lat,lng:p.lng,title:p.title,description:p.description||'',rating:['Perfect','Good','Bad'].includes(p.rating)?p.rating:'Good',map:p.map||p.category||'Default',group:p.group||'',size:['Large','Medium','Small',"Doesn't matter"].includes(p.size)?p.size:"Doesn't matter",visibility:['Perfect','Good','Bad','Not sure'].includes(p.visibility)?p.visibility:'Not sure'})}
+ let match=new Set(places.map(key));let duplicates=pending.filter(p=>match.has(key(p))).length;hide('importPanel',false);$('importSummary').textContent=t('{count} valid rows · {duplicates} matching existing coordinates · {newCount} new · {repeats} repeated CSV rows ignored.',{count:pending.length,duplicates,newCount:pending.length-duplicates,repeats})}catch(x){err(x);hide('importPanel',true)}};
 $('cancelImport').onclick=()=>{pending=[];$('csvFile').value='';hide('importPanel',true)};
-$('import').onclick=async()=>{if(!user||!pending.length)return;const overwrite=$('overwrite').checked;const existing=new Map(places.map(p=>[key(p),p]));const changes=pending.filter(p=>overwrite||!existing.has(key(p)));if(!confirm('Import '+changes.length+' places? '+(overwrite?'Matching existing entries will be overwritten (photos retained).':'Existing entries will stay unchanged.')))return;let count=0;
+$('import').onclick=async()=>{if(!user||!pending.length)return;const overwrite=$('overwrite').checked;const existing=new Map(places.map(p=>[key(p),p]));const changes=pending.filter(p=>overwrite||!existing.has(key(p)));if(!confirm(t('Import {count} places? {details}',{count:changes.length,details:t(overwrite?'Matching existing entries will be overwritten (photos retained).':'Existing entries will stay unchanged.')})))return;let count=0;
  try{for(let i=0;i<changes.length;i+=400){let b=writeBatch(db);for(const p of changes.slice(i,i+400)){const old=existing.get(key(p)),ref=old?doc(db,'users',user.uid,'places',old.id):doc(collection(db,'users',user.uid,'places'));if(old)b.update(ref,{...p,updatedAt:serverTimestamp()});else b.set(ref,{...p,photoExists:false,createdAt:serverTimestamp(),updatedAt:serverTimestamp()})}await b.commit();count+=Math.min(400,changes.length-i)}
- toast('Imported '+count+' places');pending=[];$('csvFile').value='';hide('importPanel',true)
- }catch(x){err(x);$('importSummary').textContent='Imported '+count+' rows before error. Recheck before retrying.'}};
+ toast(t('Imported {count} places',{count}));pending=[];$('csvFile').value='';hide('importPanel',true)
+ }catch(x){err(x);$('importSummary').textContent=t('Imported {count} rows before error. Recheck before retrying.',{count})}};
 
 
 function setTrackingStatus(message,isError=false){
@@ -331,13 +332,13 @@ function centerOnMyLocation(){
   map?.setView(userPosition,Math.max(map.getZoom(),16),{animate:true});
   return;
  }
- setTrackingStatus('Finding your current position…');
+ setTrackingStatus(t('Finding your current position…'));
  if(trackingWatch===null)startTracking();
  if(!navigator.geolocation||!window.isSecureContext)return;
  navigator.geolocation.getCurrentPosition(pos=>{
   acceptTrackingFix(pos);
   map?.setView(userPosition,Math.max(map.getZoom(),16),{animate:true});
- },error=>setTrackingStatus('Unable to center map: '+error.message,true),
+ },error=>setTrackingStatus(t('Unable to center map. Check location permissions.'),true),
  {enableHighAccuracy:true,timeout:15000,maximumAge:5000});
 }
 function acceptTrackingFix(pos){
@@ -350,10 +351,10 @@ function acceptTrackingFix(pos){
    className:'currentPositionIcon',
    html:'<span class="currentPositionHalo"></span><svg class="currentPositionArrow" aria-hidden="true" viewBox="0 0 64 64" width="48" height="48"><path d="M31 5 L54 55 L32 44 L10 55 Z" fill="#04B89E" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/></svg>',
    iconSize:[60,60],iconAnchor:[30,30]
-  })}).addTo(map).bindTooltip('You are here');
+  })}).addTo(map).bindTooltip(t('You are here'));
   if(!locatedOnce){map.setView(userPosition,16);locatedOnce=true}
  }
- setTrackingStatus('GPS active · ±'+Math.round(pos.coords.accuracy)+' m');
+ setTrackingStatus(t('GPS active · ±{accuracy} m',{accuracy:Math.round(pos.coords.accuracy)}));
 }
 function stopTracking(){
  if(trackingWatch!==null){navigator.geolocation?.clearWatch(trackingWatch);trackingWatch=null}
@@ -364,21 +365,21 @@ function stopTracking(){
 function startTracking(){
  if(trackingWatch!==null)return;
  if(!window.isSecureContext||!navigator.geolocation){
-  setTrackingStatus('Location unavailable. Enable GPS and open My Places over HTTPS.',true);return
+  setTrackingStatus(t('Location unavailable. Enable GPS and open My Places over HTTPS.'),true);return
  }
- setTrackingStatus('GPS active · Finding your position…');
+ setTrackingStatus(t('GPS active · Finding your position…'));
  // Browser position updates are event-driven; maximumAge allows readings up to five seconds old.
  trackingWatch=navigator.geolocation.watchPosition(
   acceptTrackingFix,
   error=>{
-   setTrackingStatus(error.code===1?'Location permission denied. Allow location access in browser settings.':'GPS unavailable: '+error.message,true);
+   setTrackingStatus(t(error.code===1?'Location permission denied. Allow location access in browser settings.':'GPS unavailable. Try again.'),true);
    if(error.code===1)stopTracking();
   },
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000}
  );
 }
 function recentTrackingFix(){return latestTrackingFix&&Date.now()-latestTrackingFix.timestamp<12000?latestTrackingFix:null}
-$('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains('hidden');hide('filters',!expanding);$('toggleFilters').setAttribute('aria-expanded',String(expanding));$('toggleFilters').innerHTML='⚙ <span class="compactLabel">Filters</span> <span id="filterCount"></span>';updateFilterBadge()};
+$('toggleFilters').onclick=()=>{const expanding=$('filters').classList.contains('hidden');hide('filters',!expanding);$('toggleFilters').setAttribute('aria-expanded',String(expanding));$('toggleFilters').innerHTML='⚙ <span class="compactLabel">'+t('Filters')+'</span> <span id="filterCount"></span>';updateFilterBadge()};
 function updateFilterBadge(){const count=['search','filterGroup','filterRating','filterSize','filterVisibility'].filter(id=>val(id)).length;const badge=$('filterCount');if(badge)badge.textContent=count?'('+count+')':''}
 for(const id of ['search','filterGroup','filterRating','filterSize','filterVisibility'])$(id).addEventListener('input',updateFilterBadge);
 
@@ -446,7 +447,7 @@ function makePdfDocument(pages,canvas,photos=[]){
 function drawReportCanvas(points){
  const W=1100,H=620,padding=85;
  const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
- const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('Map drawing not available');
+ const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error(t('Map drawing not available'));
  ctx.fillStyle='#e9f1f7';ctx.fillRect(0,0,W,H);
  const project=(p,z)=>{
   const lat=Math.max(-85.051128,Math.min(85.051128,Number(p.lat)))*Math.PI/180;
@@ -516,7 +517,7 @@ async function reportPlacePhoto(p,index){
   const image=new Image();
   await new Promise((resolve,reject)=>{
    image.onload=resolve;
-   image.onerror=()=>reject(new Error('Could not decode saved photograph'));
+   image.onerror=()=>reject(new Error(t('Could not decode saved photograph')));
    image.src=source;
   });
   if(!image.naturalWidth||!image.naturalHeight)return null;
@@ -526,10 +527,10 @@ async function reportPlacePhoto(p,index){
 }
 async function exportFilteredPdf(){
  const button=$('exportPdf'),items=relevant();
- if(!items.length){toast('No places match the current filters.');return}
+ if(!items.length){toast(t('No places match the current filters.'));return}
  const valid=items.filter(p=>Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=85&&Math.abs(Number(p.lng))<=180);
- if(!valid.length){toast('No valid coordinates to map.');return}
- button.disabled=true;button.textContent='Preparing PDF…';
+ if(!valid.length){toast(t('No valid coordinates to map.'));return}
+ button.disabled=true;button.textContent=t('Preparing PDF…');
  try{
   const {canvas,tilesLoaded}=await makeReportMap(valid);
   const pages=[[]],pdfPhotos=[];let skippedPhotos=0;let page=pages[0],y=45;
@@ -541,29 +542,29 @@ async function exportFilteredPdf(){
   const lines=(value,size=9,bold=false,max=100,color=[70,87,109])=>{
    for(const line of reportWrap(value,max)){if(y>797)nextPage();text(line,size,bold,color);y+=size+4}
   };
-  const chosenMap=val('activeMap')||'My Places';
-  text('My Places',23,true,[27,63,109]);y+=26;
+  const chosenMap=val('activeMap')||t('My Places');
+  text(t('My Places'),23,true,[27,63,109]);y+=26;
   lines(chosenMap,13,true,73,[38,91,163]);y+=3;
   const filters=[['Group','filterGroup'],['Rating','filterRating'],['Size','filterSize'],['Visibility','filterVisibility'],['Search','search']]
-   .filter(([,id])=>val(id)).map(([label,id])=>label+': '+val(id)).join('  |  ');
+   .filter(([,id])=>val(id)).map(([label,id])=>t(label)+': '+(id==='search'?val(id):displayEnum(val(id)))).join('  |  ');
   if(filters)lines(filters,9,false,105);
-  lines(valid.length+' places  |  '+new Date().toLocaleDateString('en-GB'),9);
+  lines(t('{count} places',{count:valid.length})+'  |  '+new Date().toLocaleDateString(locale),9);
   y+=10;
   const mapW=515,mapH=mapW*canvas.height/canvas.width;
   if(y+mapH>695)nextPage();
   page.push('q '+mapW.toFixed(2)+' 0 0 '+mapH.toFixed(2)+' 40 '+(841.89-y-mapH).toFixed(2)+' cm /Im0 Do Q');
   y+=mapH+23;
   if(y>785)nextPage();
-  text('Places',15,true,[27,63,109]);y+=22;
+  text(t('Places'),15,true,[27,63,109]);y+=22;
   for(let i=0;i<valid.length;i++){
    const p=valid[i];
    if(y>757)nextPage();
-   lines((i+1)+'. '+(p.title||'Untitled place'),11,true,85,[27,63,109]);
-   lines('Group: '+(p.group||'No group')+'  |  Rating: '+(p.rating||'Good')+'  |  Size: '+(p.size||"Doesn't matter")+'  |  Visibility: '+(p.visibility||'Not sure'),8.5,false,105);
+   lines((i+1)+'. '+(p.title||t('Untitled place')),11,true,85,[27,63,109]);
+   lines(t('Group')+': '+(p.group||t('No group'))+'  |  '+t('Rating')+': '+displayEnum(p.rating||'Good')+'  |  '+t('Size')+': '+displayEnum(p.size||"Doesn't matter")+'  |  '+t('Visibility')+': '+displayEnum(p.visibility||'Not sure'),8.5,false,105);
    lines(Number(p.lat).toFixed(7)+', '+Number(p.lng).toFixed(7),8.5);
    if(p.description)lines(String(p.description),9,false,102);
    if(p.photoExists){
-    button.textContent='Adding photos ('+(i+1)+'/'+valid.length+')…';
+    button.textContent=t('Adding photos ({current}/{total})…',{current:i+1,total:valid.length});
     const photo=await reportPlacePhoto(p,i);
     if(photo){
      pdfPhotos.push(photo);
@@ -577,14 +578,14 @@ async function exportFilteredPdf(){
    y+=10;
   }
   pages.forEach((commands,index)=>{
-   commands.push('BT /F1 8 Tf 0.48 0.53 0.62 rg 1 0 0 1 40 22 Tm ('+reportText('Page '+(index+1)+' / '+pages.length)+') Tj ET');
+   commands.push('BT /F1 8 Tf 0.48 0.53 0.62 rg 1 0 0 1 40 22 Tm ('+reportText(t('Page {page} / {total}',{page:index+1,total:pages.length}))+') Tj ET');
   });
   const blob=makePdfDocument(pages,canvas,pdfPhotos);
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='My-Places-'+chosenMap.replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').slice(0,55)+'.pdf';
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-  toast('PDF ready: '+valid.length+' places, '+pdfPhotos.length+' photos.'+(skippedPhotos?' '+skippedPhotos+' photos unavailable.':'')+(!tilesLoaded?' Map tiles unavailable.':''));
- }catch(e){console.error('PDF export failed',e);toast('PDF export failed: '+(e.message||e))}
- finally{button.disabled=false;button.textContent='⬇ Export PDF'}
+  toast(t('PDF ready: {count} places, {photos} photos.',{count:valid.length,photos:pdfPhotos.length})+(skippedPhotos?t(' {count} photos unavailable.',{count:skippedPhotos}):'')+(!tilesLoaded?t(' Map tiles unavailable.'):''));
+ }catch(e){console.error('PDF export failed',e);toast(t('PDF export failed: {detail}',{detail:errorMessage(e)}))}
+ finally{button.disabled=false;button.textContent=t('⬇ Export PDF')}
 }
 $('exportPdf').onclick=exportFilteredPdf;
