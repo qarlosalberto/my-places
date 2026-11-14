@@ -15,6 +15,7 @@ SITE = ROOT / "site"
 PUBLIC_FILES = (
     "index.html",
     "app.js",
+    "i18n.mjs",
     "style.css",
     "favicon.svg",
     "manifest.webmanifest",
