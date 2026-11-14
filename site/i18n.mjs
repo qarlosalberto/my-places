@@ -121,7 +121,11 @@ export function t(message, values = {}) {
 export function displayEnum(value) { return t(value ?? ''); }
 export function errorMessage(error) {
  const detail = error?.message || String(error);
- return locale === 'es-ES' && !Object.hasOwn(es, detail) ? t('An unexpected error occurred. Please try again.') : t(detail);
+ if (locale === 'en') return detail;
+ // Handle our translated validation errors as well as untranslated English keys.
+ if (Object.values(es).includes(detail)) return detail;
+ if (Object.hasOwn(es, detail)) return t(detail);
+ return t('An unexpected error occurred. Please try again.');
 }
 /** Translate only authored UI, never user-authored labels or values from Firestore. */
 export function localizeStatic(root = document) {
