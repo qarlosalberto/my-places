@@ -19,7 +19,7 @@ const es = {
  'with your Firebase web app settings.':'con los ajustes de tu aplicación web de Firebase.',
  'This Google account is not invited. Ask the project owner to add your email to Firestore':'Esta cuenta de Google no está invitada. Pide a la persona responsable que añada tu correo a Firestore',
  'with':'con',
- 'Map':'Mapa','List':'Lista','Filters':'Filtros','+ Add':'+ Añadir','Add place':'Añadir lugar',
+ 'Map':'Mapa','List':'Lista','◉ Map':'◉ Mapa','☰ List':'☰ Lista','Filters':'Filtros','+ Add':'+ Añadir','Add place':'Añadir lugar',
  'Select map':'Seleccionar mapa','Select a map':'Selecciona un mapa',
  'Sign in with Google':'Iniciar sesión con Google','Sign out':'Cerrar sesión',
  'Search places...':'Buscar lugares...','Search':'Buscar','Group filter':'Filtro por grupo',
