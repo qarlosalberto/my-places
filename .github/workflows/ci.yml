@@ -19,6 +19,7 @@ jobs:
       - name: Check syntax
         run: |
           node --input-type=module --check < site/app.js
+          node --check site/i18n.mjs
           node --input-type=module --check < site/atlas.js
           node --input-type=module --check < site/trends.js
       - name: Validate static data
