@@ -15,6 +15,8 @@ test('Primary browser language decides locale; any Spanish variant uses es-ES',(
 });
 
 test('Locale messages, placeholders and regional vocabulary',()=>{
+ assert.equal(translateFor('es-ES','◉ Map'),'◉ Mapa');
+ assert.equal(translateFor('es-ES','☰ List'),'☰ Lista');
  assert.equal(translateFor('es-ES','Search places...'),'Buscar lugares...');
  assert.equal(translateFor('es-ES','Sign in with Google'),'Iniciar sesión con Google');
  assert.equal(translateFor('es-ES','No places match the current filters.'),'Ningún lugar coincide con los filtros actuales.');
