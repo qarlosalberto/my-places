@@ -23,15 +23,23 @@ class PublicSiteTests(unittest.TestCase):
             self.assertIn('id="login"',html)
             self.assertIn('id="map"',html)
             # New places start at Medium. Existing places retain their actual stored size.
-            self.assertIn('<select id="size"><option>Large</option><option selected>Medium</option><option>Small</option>',html)
-            self.assertIn('<select id="filterSize" aria-label="Size filter"><option value="">All sizes</option><option>Large</option><option>Medium</option><option>Small</option>',html)
+            self.assertIn('<select id="size"><option value="Large">Large</option><option value="Medium" selected>Medium</option><option value="Small">Small</option>',html)
+            self.assertIn('<select id="filterSize" aria-label="Size filter"><option value="">All sizes</option><option value="Large">Large</option><option value="Medium">Medium</option><option value="Small">Small</option>',html)
             self.assertIn("(p?\"Doesn't matter\":'Medium')",js)
             # Good is the initial visibility for new entries only; edits use their saved value.
-            self.assertIn('<select id="visibility"><option>Perfect</option><option selected>Good</option><option>Bad</option><option>Not sure</option>',html)
+            self.assertIn('<select id="visibility"><option value="Perfect">Perfect</option><option value="Good" selected>Good</option><option value="Bad">Bad</option><option value="Not sure">Not sure</option>',html)
             self.assertIn("$('visibility').value=p?(p.visibility||'Not sure'):'Good'",js)
             # CSV import remains compatible with previously saved Medium values.
             self.assertIn("'Large','Medium','Small'",js)
             self.assertIn("onAuthStateChanged",js)
+            # Browser language affects only the display, not stored enum/CSV values.
+            self.assertIn('<html lang="en">',html)
+            self.assertIn('src="./i18n.mjs?v=1"',html)
+            self.assertIn("from './i18n.mjs'",js)
+            self.assertIn('value="Good" selected',html)
+            self.assertIn('value="Medium" selected',html)
+            self.assertIn("Sign in with Google using the button above",html)
+            self.assertTrue((published/"i18n.mjs").is_file())
             self.assertIn("invites",js)
             self.assertNotIn('id="home"',html)
             self.assertNotIn('id="atlas"',html)

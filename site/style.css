@@ -325,3 +325,13 @@ button:focus-visible,.upload:focus-visible{outline:3px solid #8dbbff;outline-off
 
 /* Refined result count without external maps action bar. */
 .resultCount{font-size:12px;font-weight:700;color:#748398;margin:5px 1px 8px}
+
+
+/* Keep the longer Spanish sign-out label readable on narrow screens. */
+@media(min-width:371px) and (max-width:750px){
+ header .compactToolbar .tabs{padding-right:115px}
+ header #logout{max-width:none;white-space:nowrap;overflow:visible;padding:7px 9px}
+}
+@media(max-width:370px){
+ header #logout{max-width:none;white-space:nowrap;overflow:visible}
+}

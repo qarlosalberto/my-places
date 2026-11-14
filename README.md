@@ -1,6 +1,6 @@
 # My Places
 
-Mobile-first, English-language place journal hosted with GitHub Pages.
+Mobile-first place journal hosted with GitHub Pages. The app automatically displays **Spanish (Spain)** when the browser's primary language starts with `es` (such as `es-ES` or `es-MX`), and **English** for any other language. No user setup or language preference is stored. All saved enum values and CSV headers remain stable in English across languages.
 
 ## Features
 - Sign in with Google and access by invitation, using `invites/{email}` in Firestore.
