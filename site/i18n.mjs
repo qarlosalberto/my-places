@@ -113,11 +113,12 @@ const es = {
  'PDF export failed: {detail}':'Error al exportar el PDF: {detail}'
 };
 
-export function t(message, values = {}) {
+export function translateFor(language, message, values = {}) {
  const original = String(message);
- const translated = locale === 'es-ES' ? (es[original] ?? original) : original;
+ const translated = language === 'es-ES' ? (es[original] ?? original) : original;
  return translated.replace(/\{(\w+)\}/g, (match,key) => Object.hasOwn(values,key) ? String(values[key]) : match);
 }
+export function t(message, values = {}) { return translateFor(locale,message,values); }
 export function displayEnum(value) { return t(value ?? ''); }
 export function errorMessage(error) {
  const detail = error?.message || String(error);
